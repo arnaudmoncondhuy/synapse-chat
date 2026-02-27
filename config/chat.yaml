@@ -1,0 +1,6 @@
+# Configuration for synapse-chat package
+# API endpoints and chat widget configuration
+
+services:
+  # Les contrôleurs API seront auto-découverts par les attributs Symfony
+  # (ChatApiController, CsrfController, ResetController, ConversationApiController)

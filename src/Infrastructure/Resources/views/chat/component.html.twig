@@ -1,0 +1,158 @@
+{#
+    Synapse Chat Component (Gemini-Inspired Design)
+    
+    ⚠️ DESIGN PRÉSERVÉ : Ce composant reproduit fidèlement l'interface de Google Gemini.
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    VARIABLES DISPONIBLES
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    @param array history (optionnel, défaut: [])
+        Historique des messages. Format: [{'role': 'user'|'assistant', 'content': string}]
+    
+    @param string controller_override (optionnel, défaut: 'synapse--chat')
+        Nom du controller Stimulus custom
+    
+    @param array attr (optionnel, défaut: {})
+        Attributs HTML supplémentaires pour le conteneur
+    
+    @param bool allow_new_chat (optionnel, défaut: false)
+        Afficher le bouton "Nouvelle conversation"
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    EXEMPLES D'USAGE
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    1. Plug-and-play : {{ include('@Synapse/chat/component.html.twig') }}
+    2. Avec historique : {{ include('@Synapse/chat/component.html.twig', {'history': messages}) }}
+    3. Controller custom : {{ include('@Synapse/chat/component.html.twig', {
+           'controller_override': 'myapp--chat',
+           'attr': {'data-room-id': '123'}
+       }) }}
+    
+    Voir VIEWS_INTEGRATION.md pour plus d'exemples.
+    ═══════════════════════════════════════════════════════════════════════════
+#}
+
+{# Link the CSS (AssetMapper) #}
+<link rel="stylesheet" href="{{ asset('synapse/styles/synapse.css') }}">
+
+{# Global SVG Definitions (Gemini Gradients) #}
+<svg style="width:0;height:0;position:absolute;overflow:hidden;" aria-hidden="true" focusable="false">
+    <defs>
+        <linearGradient id="gemini-gradient" gradientunits="objectBoundingBox" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="rgb(52,107,241)"></stop>
+            <stop offset="22%" stop-color="rgb(50,121,248)"></stop>
+            <stop offset="45%" stop-color="rgb(49,134,255)"></stop>
+            <stop offset="72%" stop-color="rgb(64,147,255)"></stop>
+            <stop offset="99%" stop-color="rgb(79,160,255)"></stop>
+        </linearGradient>
+        <symbol id="gemini-icon" viewbox="0 0 32 32">
+            <path d="M-3.9000000953674316,-84.94999694824219 C-5.28000020980835,-79.47000122070312 -7.079999923706055,-74.13999938964844 -9.319999694824219,-68.93000030517578 C-15.15999984741211,-55.369998931884766 -23.15999984741211,-43.5 -33.33000183105469,-33.33000183105469 C-43.5,-23.170000076293945 -55.369998931884766,-15.15999984741211 -68.93000030517578,-9.319999694824219 C-74.12999725341797,-7.079999923706055 -79.47000122070312,-5.28000020980835 -84.94999694824219,-3.9000000953674316 C-86.73999786376953,-3.450000047683716 -88,-1.850000023841858 -88,0 C-88,1.850000023841858 -86.73999786376953,3.450000047683716 -84.94999694824219,3.9000000953674316 C-79.47000122070312,5.28000020980835 -74.13999938964844,7.079999923706055 -68.93000030517578,9.319999694824219 C-55.369998931884766,15.15999984741211 -43.5099983215332,23.15999984741211 -33.33000183105469,33.33000183105469 C-23.15999984741211,43.5 -15.149999618530273,55.369998931884766 -9.319999694824219,68.93000030517578 C-7.079999923706055,74.12999725341797 -5.28000020980835,79.47000122070312 -3.9000000953674316,84.94999694824219 C-3.450000047683716,86.73999786376953 -1.840000033378601,88 0,88 C1.850000023841858,88 3.450000047683716,86.73999786376953 3.9000000953674316,84.94999694824219 C5.28000020980835,79.47000122070312 7.079999923706055,74.13999938964844 9.319999694824219,68.93000030517578 C15.15999984741211,55.369998931884766 23.15999984741211,43.5099983215332 33.33000183105469,33.33000183105469 C43.5,23.15999984741211 55.369998931884766,15.149999618530273 68.93000030517578,9.319999694824219 C74.12999725341797,7.079999923706055 79.47000122070312,5.28000020980835 84.94999694824219,3.9000000953674316 C86.73999786376953,3.450000047683716 88,1.840000033378601 88,0 C88,-1.850000023841858 86.73999786376953,-3.450000047683716 84.94999694824219,-3.9000000953674316 C79.47000122070312,-5.28000020980835 74.13999938964844,-7.079999923706055 68.93000030517578,-9.319999694824219 C55.369998931884766,-15.15999984741211 43.5099983215332,-23.15999984741211 33.33000183105469,-33.33000183105469 C23.15999984741211,-43.5 15.149999618530273,-55.369998931884766 9.319999694824219,-68.93000030517578 C7.079999923706055,-74.12999725341797 5.28000020980835,-79.47000122070312 3.9000000953674316,-84.94999694824219 C3.450000047683716,-86.73999786376953 1.850000023841858,-88 0,-88 C-1.850000023841858,-88 -3.450000047683716,-86.73999786376953 -3.9000000953674316,-84.94999694824219z" transform="matrix(0.1248,0,0,0.1248,4.98,4.98) translate(88.25,88.25)"></path>
+        </symbol>
+    </defs>
+</svg>
+
+{% set history = history|default([]) %}
+{% set controller_override = controller_override|default('synapse-chat') %}
+{% set attr = attr|default({}) %}
+{% set allow_new_chat = allow_new_chat|default(false) %}
+{% set mode_class = history is empty ? 'mode-welcome' : 'mode-chat' %}
+
+<div id="synapse-chat-container"
+     class="synapse-fullscreen-container {{ mode_class }}"
+     data-controller="{{ controller_override|default('synapse-chat') }}"
+     data-{{ controller_override|default('synapse-chat') }}-target="container"
+     data-csrf-token="{{ csrf_token('synapse_api') }}"
+     {% for k, v in attr|default({}) %} {{ k }}="{{ v|e('html_attr') }}"{% endfor %}>
+
+    <div class="synapse-chat">
+
+        {# 1. Header (Optional Override) #}
+        {% block synapse_header %}{% endblock %}
+
+        {# 2. Messages Area #}
+        <div class="synapse-chat__messages" data-{{ controller_override|default('synapse-chat') }}-target="messages">
+            
+            {# 2a. Welcome/Empty State #}
+            <div id="welcome-greeting" class="assistant-empty-state {{ history is not empty ? 'hidden' : '' }}" data-{{ controller_override|default('synapse-chat') }}-target="greeting">
+                {% block synapse_greeting_content %}
+                    <div class="greeting-title">
+                        <div class="avatar-ai">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 32 32"><use href="#gemini-icon" fill="url(#gemini-gradient)"></use></svg>
+                        </div>
+                        <span>Bonjour</span>
+                    </div>
+                    <h1 class="greeting-subtitle">Comment puis-je vous aider ?</h1>
+                {% endblock %}
+            </div>
+
+            {# 2b. History Loop #}
+            {% for msg in history %}
+                {% set is_ai = msg.role == 'assistant' or msg.role == 'model' or msg.role == 'MODEL' %}
+                <div class="synapse-chat__message synapse-chat__message--{{ is_ai ? 'assistant' : 'user' }}">
+                    {% if is_ai %}
+                        <div class="synapse-chat__avatar">
+                            <div class="avatar-ai">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 32 32"><use href="#gemini-icon" fill="url(#gemini-gradient)"></use></svg>
+                            </div>
+                        </div>
+                    {% endif %}
+                    <div class="synapse-chat__content">
+                        <div class="synapse-chat__bubble">
+                            {# Supporte à la fois les entités (via getDecryptedContent) et les tableaux (via clé 'decryptedContent' ou 'content') #}
+                            {% set displayContent = msg.decryptedContent is defined ? msg.decryptedContent : (msg.content is defined ? msg.content : '') %}
+                            {{ displayContent|synapse_markdown }}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        {# 3. Input Area #}
+        <div class="synapse-chat__input-area">
+            <form data-action="submit->{{ controller_override|default('synapse-chat') }}#send" id="chat-form">
+                <div class="synapse-chat__input-wrapper">
+                    <!-- Textarea -->
+                    <textarea 
+                        data-{{ controller_override|default('synapse-chat') }}-target="input" 
+                        placeholder="Saisissez un prompt..." 
+                        rows="1"></textarea>
+
+                    <!-- Toolbar -->
+                    <div class="input-toolbar">
+                        <div class="input-toolbar-left">
+                            {# Reset Button - Hidden by default, use sidebar "Nouvelle conversation" instead #}
+                            {% if allow_new_chat|default(false) %}
+                                <button type="button" class="action-round-btn" data-action="click->{{ controller_override|default('synapse-chat') }}#newConversation" title="Nouvelle discussion">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M13 8H7"></path><path d="M17 12H7"></path></svg>
+                                </button>
+                            {% endif %}
+
+                            {# Persona Selector (if available) #}
+                            {% set personas = synapse_get_personas() %}
+                            {% if personas is not empty %}
+                                <select class="persona-input-selector" data-{{ controller_override|default('synapse-chat') }}-target="personaSelect">
+                                    <option value="">L'assistant (par défaut)</option>
+                                    {% for p in personas %}
+                                        <option value="{{ p.key }}">{{ p.emoji }} {{ p.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            {% endif %}
+                        </div>
+
+                        <div class="input-toolbar-right">
+                            <button type="submit" class="btn-send-main" data-{{ controller_override|default('synapse-chat') }}-target="submitBtn">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="input-footer" class="input-footer-text {{ history is empty ? 'hidden' : '' }}">
+                   L'IA peut commettre des erreurs.
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

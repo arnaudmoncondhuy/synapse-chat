@@ -1,0 +1,89 @@
+{#
+    Synapse Sidebar - Historique des conversations
+
+    Usage :
+    {% include '@Synapse/chat/sidebar.html.twig' with {
+        'apiUrl': '/synapse/api/conversations',
+        'currentConversationId': conversation_id|default(''),
+        'position': 'left'  // ou 'right'
+    } %}
+#}
+
+{% set apiUrl = apiUrl|default('/synapse/api/conversations') %}
+{% set currentConversationId = currentConversationId|default('') %}
+{% set position = position|default('left') %}
+
+{# Controller wrapper pour inclure le bouton toggle dans le scope Stimulus #}
+<div
+    data-controller="synapse-sidebar"
+    data-synapse-sidebar-api-url-value="{{ apiUrl }}"
+    data-synapse-sidebar-current-conversation-id-value="{{ currentConversationId }}"
+>
+    {# Sidebar drawer #}
+    <div
+        class="synapse-sidebar synapse-sidebar-{{ position }}"
+        data-synapse-sidebar-target="drawer"
+    >
+        {# Overlay (mobile) #}
+        <div class="drawer-overlay" data-action="click->synapse-sidebar#close"></div>
+
+        {# Drawer content #}
+        <div class="drawer-content">
+            {# Header #}
+            <div class="sidebar-header">
+                <h3 class="sidebar-title">
+                    <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    Conversations
+                </h3>
+                <button
+                    class="sidebar-close"
+                    data-action="click->synapse-sidebar#close"
+                    title="Fermer"
+                >
+                    ×
+                </button>
+            </div>
+
+            {# Empty state #}
+            <div class="sidebar-empty hidden" data-synapse-sidebar-target="empty">
+                <div class="empty-icon">💬</div>
+                <p class="empty-text">Aucune conversation</p>
+                <p class="empty-hint">Démarrez une nouvelle conversation pour commencer</p>
+            </div>
+
+            {# Conversations list #}
+            <div class="sidebar-list" data-synapse-sidebar-target="list">
+                {# Rempli dynamiquement par le controller #}
+            </div>
+
+            {# Footer #}
+            <div class="sidebar-footer">
+                <button
+                    class="btn-new-conversation"
+                    data-action="click->synapse-sidebar#newConversation"
+                    title="Nouvelle conversation"
+                >
+                    <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Nouvelle conversation
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# Toggle button - maintenant dans le scope du controller #}
+    <button
+        class="sidebar-toggle sidebar-toggle-{{ position }}"
+        data-action="click->synapse-sidebar#toggle"
+        data-synapse-sidebar-target="toggle"
+        title="Historique des conversations"
+    >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+    </button>
+</div>

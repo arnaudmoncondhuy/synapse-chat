@@ -1,0 +1,75 @@
+{#
+    Synapse Chat - Page standalone
+
+    Template complet prêt à l'emploi, fourni par le bundle.
+    Aucun extends projet requis.
+
+    SURCHARGE :
+    Créer `templates/bundles/SynapseBundle/chat/page.html.twig` dans votre projet
+    pour personnaliser entièrement la page.
+
+    BLOCKS DISPONIBLES :
+    - chat_title        : Titre de l'onglet (<title>)
+    - chat_stylesheets  : Liens CSS (inclut synapse.css + sidebar.css par défaut)
+    - chat_body         : Contenu principal (sidebar + composant chat)
+    - chat_scripts      : Scripts en fin de body
+#}
+<!DOCTYPE html>
+<html lang="fr">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 128 128%22><text y=%221.2em%22 font-size=%2296%22>🧠</text></svg>">
+		<meta name="csrf-token" content="{{ csrf_token('synapse_api') }}">
+
+		<title>
+			{% block chat_title %}Chat{% endblock %}
+		</title>
+
+		{% block chat_stylesheets %}
+			<link rel="stylesheet" href="{{ asset('synapse/styles/synapse.css') }}">
+			<link rel="stylesheet" href="{{ asset('synapse/styles/sidebar.css') }}">
+		{% endblock %}
+
+		{% block chat_importmap %}
+			{{ importmap('app') }}
+		{% endblock %}
+
+		<style>
+			html,
+			body {
+				margin: 0;
+				padding: 0;
+				height: 100vh;
+				overflow: hidden;
+				background-color: #ffffff;
+				font-family: 'Google Sans', 'Inter', sans-serif;
+			}
+
+			.synapse-chat-page {
+				position: relative;
+				width: 100%;
+				height: 100vh;
+				display: flex;
+				flex-direction: row;
+			}
+		</style>
+	</head>
+	<body>
+		{% block chat_body %}
+			<div class="synapse-chat-page">
+				{% include '@Synapse/chat/sidebar.html.twig' with {
+					'apiUrl': '/synapse/api/conversations',
+					'currentConversationId': currentConversationId,
+					'position': 'left'
+				} %}
+
+				{% include '@Synapse/chat/component.html.twig' with {
+					'history': history
+				} %}
+			</div>
+		{% endblock %}
+
+		{% block chat_scripts %}{% endblock %}
+	</body>
+</html>
