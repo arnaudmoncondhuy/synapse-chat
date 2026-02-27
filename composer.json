@@ -1,7 +1,7 @@
 {
     "name": "arnaudmoncondhuy/synapse-chat",
     "type": "symfony-bundle",
-    "description": "Chat UI component for Synapse — Stimulus streaming controller, NDJSON API endpoints, and embeddable Twig templates.",
+    "description": "Composant interface de chat pour Synapse — Contrôleur Stimulus avec streaming, points de terminaison API NDJSON et templates Twig intégrables.",
     "license": "PolyForm-Noncommercial-1.0.0",
     "keywords": ["symfony", "ai", "chat", "bundle", "stimulus", "ndjson", "streaming", "sse"],
     "authors": [
