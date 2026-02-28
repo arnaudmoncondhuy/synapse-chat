@@ -16,9 +16,11 @@ composer require arnaudmoncondhuy/synapse-chat:^0.1
 
 ### 💬 Chat UI moderne
 - Interface conversationnelle en Twig
-- Streaming en temps réel via SSE
+- Streaming en temps réel via NDJSON/SSE
+- **Auto-titling** : Génération automatique du titre de conversation après le premier échange
+- **Estimation de Coût** : Affichage prédictif du coût avant l'envoi
 - Support des tool calls affichés en live
-- Historique conversationnel
+- Historique conversationnel persistant
 
 ### ⚡ Stimulus Controller
 - `synapse_chat_controller` - Gestion du chat interactif
@@ -28,11 +30,8 @@ composer require arnaudmoncondhuy/synapse-chat:^0.1
   - Gestion d'erreurs gracieuse
 
 ### 🔗 API Endpoints NDJSON
-- `POST /api/chat` - Envoi de message et streaming
-  - Format : `application/x-ndjson`
-  - Response streamée avec Server-Sent Events
-  - Support du tool use
-
+- `POST /api/chat` - Envoi de message et streaming (NDJSON)
+- `POST /api/estimate-cost` - Estimation du coût d'un message
 - `POST /api/reset` - Réinitialiser la conversation
 - `POST /api/csrf` - Obtenir token CSRF
 
@@ -58,8 +57,15 @@ synapse_chat:
 **config/packages/security.yaml** :
 ```yaml
 access_control:
-    - { path: ^/api/chat, roles: PUBLIC_ACCESS }  # Chat public
-    - { path: ^/api/reset, roles: ROLE_USER }     # Réinitialisation authentifiée
+    - { path: ^/api/chat, roles: ROLE_USER }  # Chat restreint
+    - { path: ^/api/csrf, roles: PUBLIC_ACCESS }
+```
+
+**CSRF (Optionel mais recommandé)** :
+Le bundle vérifie le header `X-CSRF-Token` par défaut.
+```yaml
+synapse_chat:
+    api_csrf_enabled: true
 ```
 
 ## Utilisation basique

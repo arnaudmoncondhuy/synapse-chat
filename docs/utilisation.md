@@ -8,11 +8,10 @@ Le bundle **Synapse Chat** (`arnaudmoncondhuy/synapse-chat`) fournit l’API HTT
 composer require arnaudmoncondhuy/synapse-core arnaudmoncondhuy/synapse-chat
 ```
 
-## Routes exposées
-
-- **POST `/synapse/api/chat`** : envoi d’un message et réception de la réponse (streaming NDJSON ou JSON).
+- **POST `/synapse/api/chat`** : envoi d’un message et réception de la réponse.
+- **POST `/synapse/api/estimate-cost`** : estimation du coût d'un message avant envoi.
 - **POST `/synapse/api/conversation/reset`** : réinitialisation de la conversation courante.
-- **API Mémoire** : endpoints pour la mémoire vectorielle / sémantique (selon la configuration Core).
+- **Auto-titling** : Le bundle génère automatiquement un titre après le premier échange (événement `title` envoyé en NDJSON).
 
 ## Protection CSRF
 

@@ -38,15 +38,19 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
             ],
         ]);
 
-        // Enregistrement des assets pour AssetMapper
-        $assetsPath = \dirname(__DIR__, 3) . '/assets';
-        $container->prependExtensionConfig('framework', [
-            'asset_mapper' => [
-                'paths' => [
-                    $assetsPath => 'synapse-chat',
+        // Enregistrement du chemin réel des assets chat dans AssetMapper.
+        // Cela permet à AssetMapper de valider les fichiers CSS et JS référencés via les symlinks
+        // assets/synapse-chat → vendor/arnaudmoncondhuy/synapse-chat/assets (créés par synapse:doctor --fix).
+        if ($container->hasExtension('framework')) {
+            $assetsDir = realpath(\dirname(__DIR__, 3) . '/assets') ?: \dirname(__DIR__, 3) . '/assets';
+            $container->prependExtensionConfig('framework', [
+                'asset_mapper' => [
+                    'paths' => [
+                        $assetsDir => 'synapse-chat',
+                    ],
                 ],
-            ],
-        ]);
+            ]);
+        }
     }
 
     /**
@@ -56,13 +60,13 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
     {
         $loader = new YamlFileLoader($container, new FileLocator(\dirname(__DIR__, 2) . '/../../config'));
 
-        // Charger la config du chat si elle existe
+        // Charger la config du chat (toujours, le fichier existe dans le bundle)
         $chatConfigFile = \dirname(__DIR__, 2) . '/../../config/chat.yaml';
         if (is_file($chatConfigFile)) {
             $loader->load('chat.yaml');
         }
 
-        // Les contrôleurs API seront auto-découverts par les attributs Symfony
+        // Les contrôleurs API sont auto-découverts via les attributs Symfony
     }
 
     public function getAlias(): string

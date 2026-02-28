@@ -37,6 +37,8 @@ class ChatApiController extends AbstractController
         private ?ConversationManager $conversationManager = null,
         private ?MessageFormatter $messageFormatter = null,
         private ?CsrfTokenManagerInterface $csrfTokenManager = null,
+        private ?\ArnaudMoncondhuy\SynapseCore\Core\Accounting\TokenAccountingService $tokenAccountingService = null,
+        private ?\ArnaudMoncondhuy\SynapseCore\Core\Accounting\TokenCostEstimator $tokenCostEstimator = null,
     ) {}
 
     /**
@@ -176,6 +178,24 @@ class ChatApiController extends AbstractController
                     }
                 };
 
+                // Pass user_id for spending limit checks
+                $user = $this->getUser();
+                if ($user instanceof ConversationOwnerInterface) {
+                    $options['user_id'] = (string) $user->getId();
+                }
+
+                // Estimate cost for spending limit check (before LLM call)
+                if ($this->tokenCostEstimator !== null) {
+                    $estimateContents = $options['history'] ?? [];
+                    if ($message !== '') {
+                        $estimateContents[] = ['role' => 'user', 'content' => $message];
+                    }
+                    if (!empty($estimateContents)) {
+                        $estimate = $this->tokenCostEstimator->estimateCost($estimateContents);
+                        $options['estimated_cost_reference'] = $estimate['cost_reference'];
+                    }
+                }
+
                 // Execute chat (ChatService will handle adding the new user message to history)
                 $result = $this->chatService->ask($message, $options, $onStatusUpdate, $onToken, $onToolExecuted);
 
@@ -195,9 +215,29 @@ class ChatApiController extends AbstractController
                             'thinking_tokens'   => $usage['thinking_tokens'] ?? 0,
                             'safety_ratings'    => $result['safety'] ?? null,
                             'model'             => $result['model'] ?? null,
+                            'preset_id'         => $result['preset_id'] ?? null,
                             'metadata'          => ['debug_id' => $result['debug_id'] ?? null],
                         ];
                         $this->conversationManager->saveMessage($conversation, MessageRole::MODEL, $result['answer'], $metadata);
+
+                        // Log chat usage to synapse_token_usage for spending limits (getConsumptionForWindow)
+                        if ($this->tokenAccountingService !== null) {
+                            $usage = $result['usage'] ?? [];
+                            $this->tokenAccountingService->logUsage(
+                                'chat',
+                                'chat_turn',
+                                $result['model'] ?? 'unknown',
+                                [
+                                    'prompt_tokens' => $usage['prompt_tokens'] ?? 0,
+                                    'completion_tokens' => $usage['completion_tokens'] ?? 0,
+                                    'thinking_tokens' => $usage['thinking_tokens'] ?? 0,
+                                ],
+                                $user instanceof ConversationOwnerInterface ? (string) $user->getId() : null,
+                                $conversation->getId(),
+                                $result['preset_id'] ?? null,
+                                $result['mission_id'] ?? null
+                            );
+                        }
                     }
                 }
 

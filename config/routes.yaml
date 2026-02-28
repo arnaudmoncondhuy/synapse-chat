@@ -1,0 +1,3 @@
+synapse_chat_api:
+    resource: '@SynapseChatBundle/src/Core/Controller/Api/'
+    type: attribute
