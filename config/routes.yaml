@@ -1,3 +1,7 @@
 synapse_chat_api:
     resource: '@SynapseChatBundle/src/Core/Controller/Api/'
     type: attribute
+
+synapse_chat_ui:
+    resource: '@SynapseChatBundle/src/Infrastructure/Controller/'
+    type: attribute

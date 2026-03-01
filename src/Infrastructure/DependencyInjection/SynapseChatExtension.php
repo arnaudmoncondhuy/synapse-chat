@@ -26,10 +26,10 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
     public function prepend(ContainerBuilder $container): void
     {
         // Enregistrement du namespace Twig @Synapse
-        $viewsPath = \dirname(__DIR__, 2) . '/Resources/views';
+        $viewsPath = \dirname(__DIR__) . '/Resources/views';
         if (!is_dir($viewsPath)) {
-            // Fallback for vendor install
-            $viewsPath = \dirname(__DIR__) . '/Resources/views';
+            // Fallback for vendor install or other structures
+            $viewsPath = \dirname(__DIR__, 2) . '/Resources/views';
         }
 
         $container->prependExtensionConfig('twig', [
@@ -58,7 +58,7 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
      */
     public function load(array $configs, ContainerBuilder $container): void
     {
-        $configDir = \dirname(__DIR__, 2) . '/config';
+        $configDir = \dirname(__DIR__, 3) . '/config';
         $loader = new YamlFileLoader($container, new FileLocator($configDir));
 
         // Charger la config du chat (toujours, le fichier existe dans le bundle)

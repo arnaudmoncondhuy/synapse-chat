@@ -201,12 +201,12 @@ class ChatApiController extends AbstractController
 
                 // Save BOTH user message and assistant response to database after processing
                 if ($conversation && $this->conversationManager) {
-                    // Save user message
+                    // Save user message (pas d'appel LLM associé)
                     if (!empty($message)) {
                         $this->conversationManager->saveMessage($conversation, MessageRole::USER, $message);
                     }
 
-                    // Save assistant message
+                    // Save assistant message + log LLM call
                     if (!empty($result['answer'])) {
                         $usage = $result['usage'] ?? [];
                         $metadata = [
@@ -218,26 +218,29 @@ class ChatApiController extends AbstractController
                             'preset_id'         => $result['preset_id'] ?? null,
                             'metadata'          => ['debug_id' => $result['debug_id'] ?? null],
                         ];
-                        $this->conversationManager->saveMessage($conversation, MessageRole::MODEL, $result['answer'], $metadata);
 
-                        // Log chat usage to synapse_token_usage for spending limits (getConsumptionForWindow)
+                        // Log l'appel LLM dans synapse_llm_call et récupérer le callId
+                        $callId = null;
                         if ($this->tokenAccountingService !== null) {
-                            $usage = $result['usage'] ?? [];
-                            $this->tokenAccountingService->logUsage(
+                            $llmCall = $this->tokenAccountingService->logUsage(
                                 'chat',
                                 'chat_turn',
                                 $result['model'] ?? 'unknown',
                                 [
-                                    'prompt_tokens' => $usage['prompt_tokens'] ?? 0,
+                                    'prompt_tokens'     => $usage['prompt_tokens'] ?? 0,
                                     'completion_tokens' => $usage['completion_tokens'] ?? 0,
-                                    'thinking_tokens' => $usage['thinking_tokens'] ?? 0,
+                                    'thinking_tokens'   => $usage['thinking_tokens'] ?? 0,
                                 ],
                                 $user instanceof ConversationOwnerInterface ? (string) $user->getId() : null,
                                 $conversation->getId(),
                                 $result['preset_id'] ?? null,
                                 $result['mission_id'] ?? null
                             );
+                            $callId = $llmCall->getCallId();
                         }
+
+                        // Lier le message assistant à son appel LLM (callId)
+                        $this->conversationManager->saveMessage($conversation, MessageRole::MODEL, $result['answer'], $metadata, $callId);
                     }
                 }
 
@@ -271,6 +274,24 @@ class ChatApiController extends AbstractController
 
                                     // Send title update event to frontend
                                     $sendEvent('title', ['title' => $newTitle]);
+                                }
+
+                                // Track title generation cost (stateless call)
+                                if ($this->tokenAccountingService !== null && !empty($titleResult['usage'])) {
+                                    $titleUser = $this->getUser();
+                                    $this->tokenAccountingService->logUsage(
+                                        'chat',
+                                        'title_generation',
+                                        $titleResult['model'] ?? 'unknown',
+                                        [
+                                            'prompt_tokens'     => $titleResult['usage']['prompt_tokens'] ?? 0,
+                                            'completion_tokens' => $titleResult['usage']['completion_tokens'] ?? 0,
+                                            'thinking_tokens'   => $titleResult['usage']['thinking_tokens'] ?? 0,
+                                        ],
+                                        $titleUser instanceof ConversationOwnerInterface ? (string) $titleUser->getId() : null,
+                                        $conversation->getId(),
+                                        $titleResult['preset_id'] ?? null,
+                                    );
                                 }
                             }
                         }

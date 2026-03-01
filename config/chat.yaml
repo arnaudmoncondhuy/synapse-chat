@@ -2,11 +2,16 @@
 # API endpoints and chat widget configuration
 
 services:
-  # Les contrôleurs API seront auto-découverts par les attributs Symfony
-  # (ChatApiController, CsrfController, ResetController, ConversationApiController)
+  _defaults:
+    autowire: true
+    autoconfigure: true
+    public: false
+
+  # ── API Controllers ────────────────────────────────────────────────────────
+  ArnaudMoncondhuy\SynapseChat\Core\Controller\Api\:
+    resource: '../src/Core/Controller/Api/'
+    tags: ['controller.service_arguments']
 
   # ── Chat UI Controller (Full page) ────────────────────────────────────────
   ArnaudMoncondhuy\SynapseChat\Infrastructure\Controller\ChatUiController:
     tags: ['controller.service_arguments']
-    autowire: true
-    autoconfigure: true
