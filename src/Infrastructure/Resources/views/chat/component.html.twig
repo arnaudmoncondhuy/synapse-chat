@@ -129,13 +129,13 @@
                                 </button>
                             {% endif %}
 
-                            {# Persona Selector (if available) #}
-                            {% set personas = synapse_get_personas() %}
-                            {% if personas is not empty %}
-                                <select class="persona-input-selector" data-{{ controller_override|default('synapse-chat') }}-target="personaSelect">
+                            {# Tone Selector (if available) #}
+                            {% set tones = synapse_get_tones() %}
+                            {% if tones is not empty %}
+                                <select class="tone-input-selector" data-{{ controller_override|default('synapse-chat') }}-target="toneSelect">
                                     <option value="">L'assistant (par défaut)</option>
-                                    {% for p in personas %}
-                                        <option value="{{ p.key }}">{{ p.emoji }} {{ p.name }}</option>
+                                    {% for t in tones %}
+                                        <option value="{{ t.key }}">{{ t.emoji }} {{ t.name }}</option>
                                     {% endfor %}
                                 </select>
                             {% endif %}

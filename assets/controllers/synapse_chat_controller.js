@@ -9,7 +9,7 @@ import { Controller } from '@hotwired/stimulus';
  * Agnostic: No hardcoded texts (uses data-defaults or attributes).
  */
 export default class extends Controller {
-    static targets = ['messages', 'input', 'submitBtn', 'personaSelect', 'container', 'greeting'];
+    static targets = ['messages', 'input', 'submitBtn', 'toneSelect', 'container', 'greeting'];
     static values = {
         history: Array,
         debug: { type: Boolean, default: false },
@@ -111,10 +111,10 @@ export default class extends Controller {
         this.inputTarget.style.height = 'auto';
         this.setLoading(true);
 
-        // Get Persona
-        let persona = null;
-        if (this.hasPersonaSelectTarget) {
-            persona = this.personaSelectTarget.value;
+        // Get Tone
+        let tone = null;
+        if (this.hasToneSelectTarget) {
+            tone = this.toneSelectTarget.value;
         }
 
         // Get current conversation ID from URL
@@ -132,7 +132,7 @@ export default class extends Controller {
                 body: JSON.stringify({
                     message: message,
                     conversation_id: conversationId,
-                    options: { persona: persona },
+                    options: { tone: tone },
                     debug: this.isDebugMode
                 })
             });

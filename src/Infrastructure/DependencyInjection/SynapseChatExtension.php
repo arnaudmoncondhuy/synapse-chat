@@ -58,11 +58,11 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
      */
     public function load(array $configs, ContainerBuilder $container): void
     {
-        $loader = new YamlFileLoader($container, new FileLocator(\dirname(__DIR__, 2) . '/../../config'));
+        $configDir = \dirname(__DIR__, 2) . '/config';
+        $loader = new YamlFileLoader($container, new FileLocator($configDir));
 
         // Charger la config du chat (toujours, le fichier existe dans le bundle)
-        $chatConfigFile = \dirname(__DIR__, 2) . '/../../config/chat.yaml';
-        if (is_file($chatConfigFile)) {
+        if (is_file($configDir . '/chat.yaml')) {
             $loader->load('chat.yaml');
         }
 

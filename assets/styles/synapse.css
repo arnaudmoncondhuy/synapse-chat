@@ -185,7 +185,7 @@ body:has(.assistant-layout) main {
     color: var(--synapse-text-primary);
 }
 
-.persona-input-selector {
+.tone-input-selector {
     appearance: none;
     border: none;
     background: transparent;
@@ -198,7 +198,7 @@ body:has(.assistant-layout) main {
     font-family: inherit;
 }
 
-.persona-input-selector:hover {
+.tone-input-selector:hover {
     background: rgba(0, 0, 0, 0.08);
     color: var(--synapse-text-primary);
 }
