@@ -4,3 +4,9 @@
 services:
   # Les contrôleurs API seront auto-découverts par les attributs Symfony
   # (ChatApiController, CsrfController, ResetController, ConversationApiController)
+
+  # ── Chat UI Controller (Full page) ────────────────────────────────────────
+  ArnaudMoncondhuy\SynapseChat\Infrastructure\Controller\ChatUiController:
+    tags: ['controller.service_arguments']
+    autowire: true
+    autoconfigure: true
