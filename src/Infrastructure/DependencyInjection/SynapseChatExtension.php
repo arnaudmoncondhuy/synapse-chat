@@ -38,12 +38,36 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
             ],
         ]);
 
-        // NOTE: AssetMapper paths are registered ONLY via Composer paths or symlinks
-        // in the local assets/ directory. Each application is responsible for creating symlinks
-        // or using Composer vendor paths (automatic via composer path repositories).
-        // This avoids absolute paths outside /app that may not exist in containers.
-        // For Packagist users: symlinks in assets/ are created by synapse:doctor --fix
-        // For path repositories (dev): assets are accessible via /app/vendor/arnaudmoncondhuy/synapse-chat/assets
+        // Enregistrement des assets chat dans AssetMapper.
+        // Supporte deux contextes :
+        // 1. Path repositories (dev) : /synapse-bundle/packages/chat/assets
+        // 2. Packagist (prod) : /app/vendor/arnaudmoncondhuy/synapse-chat/assets
+        if ($container->hasExtension('framework')) {
+            $assetsDir = realpath(\dirname(__DIR__, 3) . '/assets') ?: \dirname(__DIR__, 3) . '/assets';
+
+            // Essayer le chemin réel d'abord (path repositories)
+            if (is_dir($assetsDir)) {
+                $container->prependExtensionConfig('framework', [
+                    'asset_mapper' => [
+                        'paths' => [
+                            $assetsDir => 'synapse-chat',
+                        ],
+                    ],
+                ]);
+            } else {
+                // Fallback sur le chemin vendor (Packagist)
+                $vendorAssetsDir = \dirname(__DIR__, 5) . '/vendor/arnaudmoncondhuy/synapse-chat/assets';
+                if (is_dir($vendorAssetsDir)) {
+                    $container->prependExtensionConfig('framework', [
+                        'asset_mapper' => [
+                            'paths' => [
+                                $vendorAssetsDir => 'synapse-chat',
+                            ],
+                        ],
+                    ]);
+                }
+            }
+        }
     }
 
     /**
