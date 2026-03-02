@@ -1,0 +1,9 @@
+/vendor/
+composer.lock
+.env.local
+.env.*.local
+.phpunit.result.cache
+*.cache
+.DS_Store
+Thumbs.db
+/node_modules/
