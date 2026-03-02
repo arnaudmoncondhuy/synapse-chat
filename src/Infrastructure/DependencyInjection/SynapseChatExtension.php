@@ -38,34 +38,21 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
             ],
         ]);
 
-        // Enregistrement des assets chat dans AssetMapper.
-        // Supporte deux contextes :
-        // 1. Path repositories (dev) : /synapse-bundle/packages/chat/assets
-        // 2. Packagist (prod) : /app/vendor/arnaudmoncondhuy/synapse-chat/assets
+        // Enregistrement des assets chat dans AssetMapper via le chemin vendor.
+        // Fonctionne pour les deux contextes :
+        // - Path repositories : vendor contient un symlink vers /synapse-bundle/...
+        // - Packagist : vendor contient une copie complète
+        // AssetMapper nécessite un chemin accessible au serveur HTTP (dans /app/...)
         if ($container->hasExtension('framework')) {
-            $assetsDir = realpath(\dirname(__DIR__, 3) . '/assets') ?: \dirname(__DIR__, 3) . '/assets';
-
-            // Essayer le chemin réel d'abord (path repositories)
-            if (is_dir($assetsDir)) {
+            $vendorAssetsDir = \dirname(__DIR__, 5) . '/vendor/arnaudmoncondhuy/synapse-chat/assets';
+            if (is_dir($vendorAssetsDir)) {
                 $container->prependExtensionConfig('framework', [
                     'asset_mapper' => [
                         'paths' => [
-                            $assetsDir => 'synapse-chat',
+                            $vendorAssetsDir => 'synapse-chat',
                         ],
                     ],
                 ]);
-            } else {
-                // Fallback sur le chemin vendor (Packagist)
-                $vendorAssetsDir = \dirname(__DIR__, 5) . '/vendor/arnaudmoncondhuy/synapse-chat/assets';
-                if (is_dir($vendorAssetsDir)) {
-                    $container->prependExtensionConfig('framework', [
-                        'asset_mapper' => [
-                            'paths' => [
-                                $vendorAssetsDir => 'synapse-chat',
-                            ],
-                        ],
-                    ]);
-                }
             }
         }
     }
