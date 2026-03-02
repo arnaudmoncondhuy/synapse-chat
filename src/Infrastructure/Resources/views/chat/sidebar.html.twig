@@ -9,7 +9,7 @@
     } %}
 #}
 
-{% set apiUrl = apiUrl|default('/synapse/api/conversations') %}
+{% set apiUrl = apiUrl|default(path('synapse_api_conversations_list')) %}
 {% set currentConversationId = currentConversationId|default('') %}
 {% set position = position|default('left') %}
 

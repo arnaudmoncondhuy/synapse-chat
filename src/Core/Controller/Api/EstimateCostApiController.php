@@ -17,7 +17,7 @@ use Symfony\Component\Routing\Attribute\Route;
 /**
  * API d'estimation du coût d'une requête avant envoi.
  */
-#[Route('/synapse/api')]
+#[Route('%synapse.chat_api_prefix%')]
 class EstimateCostApiController extends AbstractController
 {
     public function __construct(

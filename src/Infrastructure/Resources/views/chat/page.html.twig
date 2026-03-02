@@ -59,7 +59,7 @@
 		{% block chat_body %}
 			<div class="synapse-chat-page">
 				{% include '@Synapse/chat/sidebar.html.twig' with {
-					'apiUrl': '/synapse/api/conversations',
+					'apiUrl': path('synapse_api_conversations_list'),
 					'currentConversationId': currentConversationId,
 					'position': 'left'
 				} %}

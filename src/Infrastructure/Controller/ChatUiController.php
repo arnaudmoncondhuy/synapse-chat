@@ -18,7 +18,7 @@ use Symfony\Component\Routing\Attribute\Route;
  * Expose la route `/synapse/chat` prête à l'emploi.
  * Le template peut être surchargé via `templates/bundles/SynapseChatBundle/chat/page.html.twig`.
  */
-#[Route('/synapse/chat', name: 'synapse_chat', methods: ['GET'])]
+#[Route('%synapse.chat_ui_prefix%', name: 'synapse_chat', methods: ['GET'])]
 class ChatUiController extends AbstractController
 {
     public function __construct(

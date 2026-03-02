@@ -63,6 +63,12 @@
      class="synapse-fullscreen-container {{ mode_class }}"
      data-controller="{{ controller_override|default('synapse-chat') }}"
      data-{{ controller_override|default('synapse-chat') }}-target="container"
+     data-{{ controller_override|default('synapse-chat') }}-chat-url-value="{{ path('synapse_api_chat') }}"
+     data-{{ controller_override|default('synapse-chat') }}-reset-url-value="{{ path('synapse_api_reset') }}"
+     data-{{ controller_override|default('synapse-chat') }}-csrf-url-value="{{ path('synapse_api_csrf_token') }}"
+     data-{{ controller_override|default('synapse-chat') }}-memory-confirm-url-value="{{ path('synapse_api_memory_confirm') }}"
+     data-{{ controller_override|default('synapse-chat') }}-memory-reject-url-value="{{ path('synapse_api_memory_reject') }}"
+     data-{{ controller_override|default('synapse-chat') }}-debug-url-template-value="{{ path('synapse_debug_show', {'id': 'DEBUG_ID'}) }}"
      data-csrf-token="{{ csrf_token('synapse_api') }}"
      {% for k, v in attr|default({}) %} {{ k }}="{{ v|e('html_attr') }}"{% endfor %}>
 

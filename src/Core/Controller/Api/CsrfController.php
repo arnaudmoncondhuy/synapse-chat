@@ -14,7 +14,7 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
  * Endpoint pour récupérer le jeton CSRF côté front (AJAX).
  * Évite de dépendre du HTML (meta / data-attribute) qui peut être absent si la page est surchargée ou en cache.
  */
-#[Route('/synapse/api')]
+#[Route('%synapse.chat_api_prefix%')]
 class CsrfController extends AbstractController
 {
     public function __construct(

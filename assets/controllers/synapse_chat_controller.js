@@ -13,7 +13,13 @@ export default class extends Controller {
     static values = {
         history: Array,
         debug: { type: Boolean, default: false },
-        welcomeMessage: { type: String, default: '' } // Allow overriding "New Conversation" toast
+        welcomeMessage: { type: String, default: '' }, // Allow overriding "New Conversation" toast
+        chatUrl: String,
+        resetUrl: String,
+        csrfUrl: String,
+        memoryConfirmUrl: String,
+        memoryRejectUrl: String,
+        debugUrlTemplate: String
     };
 
     connect() {
@@ -68,7 +74,7 @@ export default class extends Controller {
     async ensureCsrfToken() {
         if (this.getCsrfToken()) return this.getCsrfToken();
         try {
-            const r = await fetch('/synapse/api/csrf-token', { credentials: 'same-origin' });
+            const r = await fetch(this.csrfUrlValue || '/synapse/api/csrf-token', { credentials: 'same-origin' });
             if (!r.ok) return '';
             const data = await r.json();
             const token = data?.token ?? '';
@@ -126,7 +132,7 @@ export default class extends Controller {
         if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
 
         try {
-            const response = await fetch('/synapse/api/chat', {
+            const response = await fetch(this.chatUrlValue || '/synapse/api/chat', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
@@ -244,7 +250,9 @@ export default class extends Controller {
 
                                     // Re-inject debug button if in debug mode
                                     if (this.isDebugMode && evt.payload.debug_id) {
-                                        const debugUrl = `/synapse/_debug/${evt.payload.debug_id}`;
+                                        const debugUrl = this.debugUrlTemplateValue 
+                                            ? this.debugUrlTemplateValue.replace('DEBUG_ID', evt.payload.debug_id)
+                                            : `/synapse/_debug/${evt.payload.debug_id}`;
                                         const debugHtml = `
                                         <button type="button" class="synapse-chat__debug-trigger"
                                                 onclick="window.open('${debugUrl}', '_blank')"
@@ -379,7 +387,7 @@ export default class extends Controller {
         if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
 
         try {
-            const response = await fetch('/synapse/api/reset', {
+            const response = await fetch(this.resetUrlValue || '/synapse/api/reset', {
                 method: 'POST',
                 headers
             });
@@ -433,7 +441,9 @@ export default class extends Controller {
         // Debug info
         let debugHtml = '';
         if (this.isDebugMode && debugData && debugData.debug_id) {
-            const debugUrl = `/synapse/_debug/${debugData.debug_id}`;
+            const debugUrl = this.debugUrlTemplateValue 
+                ? this.debugUrlTemplateValue.replace('DEBUG_ID', debugData.debug_id)
+                : `/synapse/_debug/${debugData.debug_id}`;
             debugHtml = `
                 <button type="button" class="synapse-chat__debug-trigger"
                         onclick="window.open('${debugUrl}', '_blank')"
@@ -627,7 +637,7 @@ export default class extends Controller {
             const headers = { 'Content-Type': 'application/json' };
             if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
             try {
-                await fetch('/synapse/api/memory/confirm', {
+                await fetch(this.memoryConfirmUrlValue || '/synapse/api/memory/confirm', {
                     method: 'POST',
                     headers,
                     body: JSON.stringify({
@@ -648,7 +658,7 @@ export default class extends Controller {
             const headers = { 'Content-Type': 'application/json' };
             if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
             try {
-                await fetch('/synapse/api/memory/reject', { method: 'POST', headers });
+                await fetch(this.memoryRejectUrlValue || '/synapse/api/memory/reject', { method: 'POST', headers });
             } catch (e) { /* Silencieux */ }
             removeEncart();
         };

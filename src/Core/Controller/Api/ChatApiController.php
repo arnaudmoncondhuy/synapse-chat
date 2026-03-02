@@ -25,10 +25,10 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 /**
  * Contrôleur API principal pour le flux de conversation.
  *
- * Ce contrôleur expose le endpoint `/synapse/api/chat` qui gère les échanges
+ * Ce contrôleur expose le endpoint `%synapse.chat_api_prefix%/chat` qui gère les échanges
  * en temps réel avec le frontend via un flux NDJSON (Streamed Response).
  */
-#[Route('/synapse/api')]
+#[Route('%synapse.chat_api_prefix%')]
 class ChatApiController extends AbstractController
 {
     public function __construct(
@@ -65,7 +65,7 @@ class ChatApiController extends AbstractController
             $token = (string) $token;
             if ($token === '') {
                 throw $this->createAccessDeniedException(
-                    'Jeton CSRF manquant. Le front doit envoyer X-CSRF-Token (récupéré via GET /synapse/api/csrf-token). Sinon : synapse.security.api_csrf_enabled: false dans config.'
+                    'Jeton CSRF manquant. Le front doit envoyer X-CSRF-Token (récupéré via GET %synapse.chat_api_prefix%/csrf-token). Sinon : synapse.security.api_csrf_enabled: false dans config.'
                 );
             }
             if (!$this->isCsrfTokenValid('synapse_api', $token)) {

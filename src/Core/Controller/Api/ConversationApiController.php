@@ -15,7 +15,7 @@ use Symfony\Component\Routing\Attribute\Route;
 /**
  * API REST pour la gestion des conversations
  */
-#[Route('/synapse/api/conversations')]
+#[Route('%synapse.chat_api_prefix%/conversations')]
 class ConversationApiController extends AbstractController
 {
     public function __construct(

@@ -15,7 +15,7 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 /**
  * Contrôleur utilitaire pour la gestion de session.
  */
-#[Route('/synapse/api')]
+#[Route('%synapse.chat_api_prefix%')]
 class ResetController extends AbstractController
 {
     public function __construct(
