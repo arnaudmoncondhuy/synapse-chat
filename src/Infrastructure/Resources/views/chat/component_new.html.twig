@@ -51,6 +51,7 @@
      data-{{ controller_override }}-conversations-url-value="{{ path('synapse_api_conversations_list') }}"
      data-{{ controller_override }}-debug-url-template-value="{{ path('synapse_debug_show', {'id': 'DEBUG_ID'}) }}"
      data-{{ controller_override }}-current-conversation-id-value="{{ currentConversationId }}"
+     data-{{ controller_override }}-debug-value="{{ debug_mode|default(false) ? 'true' : 'false' }}"
      data-csrf-token="{{ csrf_token('synapse_api') }}"
      {% for k, v in attr|default({}) %} {{ k }}="{{ v|e('html_attr') }}"{% endfor %}>
 
@@ -160,6 +161,11 @@
                             {% set displayContent = msg.decryptedContent is defined ? msg.decryptedContent : (msg.content is defined ? msg.content : '') %}
                             {{ displayContent|synapse_markdown }}
                         </div>
+                        {% if is_ai and debug_mode|default(false) and msg.metadata.debug_id is defined %}
+                            <button type="button" class="synapse-chat-debug-btn" data-action="click->{{ controller_override }}#showDebug" data-debug-id="{{ msg.metadata.debug_id }}" title="Voir le debug">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 2 8 8-8 8"></path><path d="M12 18h.01"></path></svg>
+                            </button>
+                        {% endif %}
                     </div>
                 </div>
             {% endfor %}

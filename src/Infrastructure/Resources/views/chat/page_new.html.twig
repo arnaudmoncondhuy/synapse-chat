@@ -33,7 +33,9 @@
 </head>
 <body>
     <div class="synapse-chat-v2-wrapper">
-        {{ include('@Synapse/chat/component_new.html.twig') }}
+        {{ include('@Synapse/chat/component_new.html.twig', {
+            'debug_mode': debug_mode|default(false)
+        }) }}
     </div>
 
     {% block chat_scripts %}{% endblock %}

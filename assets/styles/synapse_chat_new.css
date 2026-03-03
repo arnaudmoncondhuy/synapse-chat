@@ -668,6 +668,38 @@
     padding: 0;
 }
 
+.synapse-chat-debug-btn {
+    align-self: flex-start;
+    background: transparent;
+    color: var(--synapse-chat-text-muted);
+    border: 1px solid var(--synapse-chat-border);
+    border-radius: var(--synapse-chat-radius-sm);
+    padding: 2px 6px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+    opacity: 0.4;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.synapse-chat-debug-btn:hover {
+    background: var(--synapse-chat-bg-surface);
+    border-color: var(--synapse-chat-border-hover);
+    color: var(--synapse-chat-text);
+    opacity: 1;
+}
+
+.synapse-theme-dark .synapse-chat-debug-btn {
+    border-color: var(--synapse-chat-border);
+}
+
+.synapse-theme-dark .synapse-chat-debug-btn:hover {
+    background: var(--synapse-chat-bg-surface);
+}
+
 /* Markdown dans la bulle */
 .synapse-chat-bubble p {
     margin: 0 0 1rem 0;

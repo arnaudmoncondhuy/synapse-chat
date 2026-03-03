@@ -22,6 +22,7 @@ class ChatV2UiController extends AbstractController
 {
     public function __construct(
         private PermissionCheckerInterface $permissionChecker,
+        private \ArnaudMoncondhuy\SynapseCore\Contract\ConfigProviderInterface $configProvider,
         private ?ConversationManager $conversationManager = null,
     ) {}
 
@@ -47,9 +48,13 @@ class ChatV2UiController extends AbstractController
             }
         }
 
+        $config = $this->configProvider->getConfig();
+        $debugMode = $config['debug_mode'] ?? false;
+
         return $this->render('@Synapse/chat/page_new.html.twig', [
             'history' => $history,
             'currentConversationId' => $currentConversationId,
+            'debug_mode' => $debugMode,
         ]);
     }
 }

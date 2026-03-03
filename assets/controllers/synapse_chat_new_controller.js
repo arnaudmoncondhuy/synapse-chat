@@ -383,8 +383,11 @@ export default class extends Controller {
 
                                 if (currentMessageBubble && evt.payload?.answer) {
                                     currentMessageBubble.innerHTML = this.parseMarkdown(evt.payload.answer);
+                                    if (this.debugValue && evt.payload?.debug_id) {
+                                        this.addDebugButtonToMessage(currentMessageBubble.closest('.synapse-chat-message'), evt.payload.debug_id);
+                                    }
                                 } else if (evt.payload?.answer && !currentResponseText) {
-                                    this.addMessage(evt.payload.answer, 'assistant');
+                                    this.addMessage(evt.payload.answer, 'assistant', { debug_id: evt.payload.debug_id });
                                 }
 
                             } else if (evt.type === 'status' && evt.payload?.message) {
@@ -437,8 +440,9 @@ export default class extends Controller {
         }
     }
 
-    addMessage(text, role) {
+    addMessage(text, role, metadata = {}) {
         const formattedText = this.parseMarkdown(text);
+        const debugId = metadata?.debug_id || null;
 
         let avatarContent = '';
         if (role === 'assistant') {
@@ -451,11 +455,21 @@ export default class extends Controller {
             avatarContent = `<div class="synapse-chat-avatar synapse-chat-avatar--empty"></div>`; // Espace pour l'alignement
         }
 
+        let debugButton = '';
+        if (role === 'assistant' && this.debugValue && debugId) {
+            debugButton = `
+                <button type="button" class="synapse-chat-debug-btn" data-action="click->${this.identifier}#showDebug" data-debug-id="${debugId}" title="Voir le debug">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 2 8 8-8 8"></path><path d="M12 18h.01"></path></svg>
+                </button>
+            `;
+        }
+
         const html = `
             <div class="synapse-chat-message synapse-chat-message--${role}">
                 ${avatarContent}
                 <div class="synapse-chat-message__content">
                     <div class="synapse-chat-bubble">${formattedText}</div>
+                    ${debugButton}
                 </div>
             </div>
         `;
@@ -485,6 +499,28 @@ export default class extends Controller {
             const loader = this.element.querySelector('#synapse-chat-loading-ind');
             if (loader) loader.remove();
         }
+    }
+
+    addDebugButtonToMessage(messageElement, debugId) {
+        if (!messageElement || !debugId || !this.debugValue) return;
+
+        const contentArea = messageElement.querySelector('.synapse-chat-message__content');
+        if (!contentArea || contentArea.querySelector('.synapse-chat-debug-btn')) return;
+
+        const btnHtml = `
+            <button type="button" class="synapse-chat-debug-btn" data-action="click->${this.identifier}#showDebug" data-debug-id="${debugId}" title="Voir le debug">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 2 8 8-8 8"></path><path d="M12 18h.01"></path></svg>
+            </button>
+        `;
+        contentArea.insertAdjacentHTML('beforeend', btnHtml);
+    }
+
+    showDebug(event) {
+        const debugId = event.currentTarget.dataset.debugId;
+        if (!debugId || !this.hasDebugUrlTemplateValue) return;
+
+        const url = this.debugUrlTemplateValue.replace('DEBUG_ID', debugId);
+        window.open(url, '_blank');
     }
 
     /* ── 4. MÉMOIRE ET OUTILS ──────────────────────────────────────────────── */
