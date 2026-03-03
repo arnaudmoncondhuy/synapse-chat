@@ -11,7 +11,10 @@ export default class extends Controller {
         // Zone Chat Principal
         'messages', 'input', 'submitBtn', 'toneSelect', 'greeting',
         // Zone Sidebar
-        'sidebar', 'sidebarOverlay', 'conversationsList', 'conversationsEmpty'
+        'sidebar', 'sidebarOverlay', 'conversationsList', 'conversationsEmpty',
+        // Onglets et mémoire
+        'tabConversations', 'tabMemory', 'panelConversations', 'panelMemory',
+        'memoryInput', 'memoryList', 'memoryEmpty'
     ];
 
     static values = {
@@ -20,6 +23,10 @@ export default class extends Controller {
         csrfUrl: String,
         memoryConfirmUrl: String,
         memoryRejectUrl: String,
+        memoryListUrl: String,
+        memoryDeleteUrlTemplate: String,
+        memoryManualUrl: String,
+        memoryUpdateUrlTemplate: String,
         conversationsUrl: String,
         debugUrlTemplate: String,
         currentConversationId: String,
@@ -71,6 +78,36 @@ export default class extends Controller {
         if (this.hasSidebarOverlayTarget) {
             this.sidebarOverlayTarget.classList.remove('is-visible');
         }
+    }
+
+    /* ── 1.5. ONGLET CONVERSATIONS / MÉMOIRE ───────────────────────── */
+
+    showConversationsTab() {
+        if (this.hasTabConversationsTarget) this.tabConversationsTarget.classList.add('active');
+        if (this.hasTabMemoryTarget) this.tabMemoryTarget.classList.remove('active');
+
+        if (this.hasPanelConversationsTarget) this.panelConversationsTarget.classList.remove('synapse-hidden', 'active'); // trick to force reflow if needed
+        if (this.hasPanelConversationsTarget) this.panelConversationsTarget.classList.add('active');
+
+        if (this.hasPanelMemoryTarget) {
+            this.panelMemoryTarget.classList.remove('active');
+            this.panelMemoryTarget.classList.add('synapse-hidden');
+        }
+    }
+
+    showMemoryTab() {
+        if (this.hasTabConversationsTarget) this.tabConversationsTarget.classList.remove('active');
+        if (this.hasTabMemoryTarget) this.tabMemoryTarget.classList.add('active');
+
+        if (this.hasPanelConversationsTarget) {
+            this.panelConversationsTarget.classList.remove('active');
+            this.panelConversationsTarget.classList.add('synapse-hidden');
+        }
+
+        if (this.hasPanelMemoryTarget) this.panelMemoryTarget.classList.remove('synapse-hidden', 'active');
+        if (this.hasPanelMemoryTarget) this.panelMemoryTarget.classList.add('active');
+
+        this.loadMemories();
     }
 
     /* ── 2. CHARGEMENT DES CONVERSATIONS (Anciennement sidebar_controller) ── */
@@ -492,6 +529,176 @@ export default class extends Controller {
 
         encart.querySelector('[data-action-type="confirm-conv"]').addEventListener('click', () => confirmFunc('conversation'));
         encart.querySelector('[data-action-type="confirm-user"]').addEventListener('click', () => confirmFunc('user'));
+    }
+
+    /* ── 4.5. CRUD MÉMOIRE (SIDEBAR) ───────────────────────────────────────── */
+
+    async loadMemories() {
+        try {
+            const url = this.memoryListUrlValue || '/synapse/api/memory';
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                if (response.status === 401) this.renderMemories([]);
+                else throw new Error('Erreur de chargement des souvenirs');
+                return;
+            }
+
+            const data = await response.json();
+            this.renderMemories(data.memories || []);
+        } catch (error) {
+            console.error('[Synapse] Impossible de charger la mémoire', error);
+            if (this.hasMemoryListTarget) {
+                this.memoryListTarget.innerHTML = `<div class="p-3 text-sm text-red-500">Erreur réseau.</div>`;
+            }
+        }
+    }
+
+    renderMemories(memories) {
+        if (memories.length === 0) {
+            if (this.hasMemoryEmptyTarget) this.memoryEmptyTarget.classList.remove('synapse-hidden');
+            if (this.hasMemoryListTarget) this.memoryListTarget.innerHTML = '';
+            return;
+        }
+
+        if (this.hasMemoryEmptyTarget) this.memoryEmptyTarget.classList.add('synapse-hidden');
+
+        const html = memories.map(mem => {
+            const scopeLabel = mem.scope === 'conversation' ? 'Discussion' : 'Général';
+            return `
+                <div class="synapse-memory-item" data-memory-id="${mem.id}">
+                    <div class="synapse-memory-item__content" data-memory-text-target="true">${this.escapeHtml(mem.content)}</div>
+                    <div class="synapse-memory-item__meta">
+                        <span>${this.formatDate(mem.created_at)}</span>
+                        <span>${scopeLabel}</span>
+                    </div>
+                    
+                    <div class="synapse-memory-actions">
+                        <button type="button" class="synapse-memory-btn" data-action="click->${this.identifier}#editMemory" aria-label="Éditer">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                        </button>
+                        <button type="button" class="synapse-memory-btn is-danger" data-action="click->${this.identifier}#deleteMemory" aria-label="Supprimer">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                    </div>
+
+                    <div class="synapse-memory-edit-form">
+                        <textarea class="synapse-memory-edit-input" data-memory-input-target="true">${this.escapeHtml(mem.content)}</textarea>
+                        <div class="synapse-memory-edit-actions">
+                            <button type="button" class="synapse-memory-edit-btn synapse-memory-edit-btn--cancel" data-action="click->${this.identifier}#cancelEditMemory">Annuler</button>
+                            <button type="button" class="synapse-memory-edit-btn synapse-memory-edit-btn--save" data-action="click->${this.identifier}#saveMemory">Enregistrer</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        if (this.hasMemoryListTarget) {
+            this.memoryListTarget.innerHTML = html;
+        }
+    }
+
+    async addMemory(event) {
+        event.preventDefault();
+        const input = this.memoryInputTarget;
+        const text = input.value.trim();
+        const submitBtn = event.currentTarget.querySelector('button[type="submit"]');
+
+        if (!text) return;
+
+        input.disabled = true;
+        submitBtn.disabled = true;
+
+        try {
+            const url = this.memoryManualUrlValue || '/synapse/api/memory/manual';
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await this.ensureCsrfToken() },
+                body: JSON.stringify({ fact: text })
+            });
+
+            if (!response.ok) throw new Error('Erreur ajout souvenir');
+
+            input.value = '';
+            this.loadMemories(); // Rafraichissment de la liste complète
+        } catch (e) {
+            console.error(e);
+            alert("Erreur lors de l'enregistrement du fait.");
+        } finally {
+            input.disabled = false;
+            submitBtn.disabled = false;
+        }
+    }
+
+    async deleteMemory(event) {
+        const item = event.currentTarget.closest('.synapse-memory-item');
+        if (!confirm('Oublier définitivement ce souvenir ?')) return;
+
+        const id = item.dataset.memoryId;
+        item.style.opacity = '0.5';
+
+        try {
+            let url = (this.memoryDeleteUrlTemplateValue || '/synapse/api/memory/MEMORY_ID').replace('MEMORY_ID', id);
+            const response = await fetch(url, { method: 'DELETE', headers: { 'X-CSRF-Token': await this.ensureCsrfToken() } });
+            if (!response.ok) throw new Error('Erreur suppression');
+            item.remove();
+
+            // Si la liste est vide après suppression, afficher le state empty
+            if (this.memoryListTarget.children.length === 0 && this.hasMemoryEmptyTarget) {
+                this.memoryEmptyTarget.classList.remove('synapse-hidden');
+            }
+        } catch (e) {
+            console.error(e);
+            item.style.opacity = '1';
+        }
+    }
+
+    editMemory(event) {
+        const item = event.currentTarget.closest('.synapse-memory-item');
+        item.classList.add('is-editing');
+        const input = item.querySelector('[data-memory-input-target="true"]');
+        if (input) input.focus();
+    }
+
+    cancelEditMemory(event) {
+        const item = event.currentTarget.closest('.synapse-memory-item');
+        item.classList.remove('is-editing');
+        const input = item.querySelector('[data-memory-input-target="true"]');
+        const textTarget = item.querySelector('[data-memory-text-target="true"]');
+        if (input && textTarget) input.value = textTarget.textContent; // rollback value
+    }
+
+    async saveMemory(event) {
+        const item = event.currentTarget.closest('.synapse-memory-item');
+        const id = item.dataset.memoryId;
+        const input = item.querySelector('[data-memory-input-target="true"]');
+        const textTarget = item.querySelector('[data-memory-text-target="true"]');
+        const newText = input.value.trim();
+
+        if (!newText) return this.cancelEditMemory(event);
+        if (newText === textTarget.textContent) return this.cancelEditMemory(event);
+
+        const btn = event.currentTarget;
+        btn.disabled = true;
+
+        try {
+            let url = (this.memoryUpdateUrlTemplateValue || '/synapse/api/memory/MEMORY_ID').replace('MEMORY_ID', id);
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await this.ensureCsrfToken() },
+                body: JSON.stringify({ fact: newText })
+            });
+
+            if (!response.ok) throw new Error('Erreur maj souvenir');
+
+            textTarget.textContent = newText;
+            item.classList.remove('is-editing');
+        } catch (e) {
+            console.error(e);
+            alert("Erreur lors de la mise à jour.");
+        } finally {
+            btn.disabled = false;
+        }
     }
 
     /* ── 5. UTILITAIRES & MARKDOWN ─────────────────────────────────────────── */

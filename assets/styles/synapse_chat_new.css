@@ -269,9 +269,257 @@
     border-color: var(--synapse-chat-primary);
 }
 
-.synapse-chat-conv-btn.is-danger:hover {
-    background: #ef4444;
-    border-color: #ef4444;
+/* ── 3.1. ONGLETS (TABS) ────────────────────────────────────────────────── */
+.synapse-chat-tabs {
+    display: flex;
+    background: var(--synapse-chat-bg-input);
+    border-radius: var(--synapse-chat-radius-md);
+    padding: 4px;
+    gap: 4px;
+    width: 100%;
+}
+
+.synapse-chat-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-radius: var(--synapse-chat-radius-sm);
+    padding: 6px 12px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--synapse-chat-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.synapse-chat-tab:hover {
+    color: var(--synapse-chat-text);
+}
+
+.synapse-chat-tab.active {
+    background: var(--synapse-chat-bg);
+    color: var(--synapse-chat-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.synapse-theme-dark .synapse-chat-tab.active {
+    background: var(--synapse-chat-bg-surface);
+}
+
+.synapse-chat-tab-panel {
+    display: none;
+}
+
+.synapse-chat-tab-panel.active {
+    display: block;
+    animation: synapseFadeIn 0.3s ease;
+}
+
+/* ── 3.2. MÉMOIRE (MEMORY) ─────────────────────────────────────────────── */
+.synapse-memory-add-form {
+    padding: 0 0 12px 0;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--synapse-chat-border);
+}
+
+.synapse-memory-input-wrapper {
+    display: flex;
+    background: var(--synapse-chat-bg-input);
+    border-radius: var(--synapse-chat-radius-md);
+    padding: 4px 4px 4px 12px;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+}
+
+.synapse-memory-input-wrapper:focus-within {
+    border-color: var(--synapse-chat-primary-alpha-10);
+    background: var(--synapse-chat-bg);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+
+.synapse-theme-dark .synapse-memory-input-wrapper:focus-within {
+    border-color: var(--synapse-chat-border);
+    background: var(--synapse-chat-bg-surface);
+}
+
+.synapse-memory-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 0.8125rem;
+    color: var(--synapse-chat-text);
+}
+
+.synapse-memory-submit {
+    background: var(--synapse-chat-primary);
+    color: white;
+    border: none;
+    border-radius: var(--synapse-chat-radius-sm);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.synapse-memory-submit:hover {
+    background: var(--synapse-chat-primary-hover);
+}
+
+.synapse-memory-submit:disabled {
+    background: var(--synapse-chat-border);
+    cursor: not-allowed;
+}
+
+/* Element souvenir */
+.synapse-memory-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    background: var(--synapse-chat-bg);
+    border: 1px solid var(--synapse-chat-border);
+    border-radius: var(--synapse-chat-radius-md);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--synapse-chat-text);
+    position: relative;
+    transition: all 0.2s;
+}
+
+.synapse-theme-dark .synapse-memory-item {
+    background: var(--synapse-chat-bg-input);
+}
+
+.synapse-memory-item:hover {
+    border-color: var(--synapse-chat-primary-alpha-10);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.synapse-memory-item__content {
+    margin-bottom: 4px;
+    word-break: break-word;
+}
+
+.synapse-memory-item__meta {
+    font-size: 0.7rem;
+    color: var(--synapse-chat-text-muted);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Actions au survol de la carte */
+.synapse-memory-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    background: var(--synapse-chat-bg);
+    border-radius: var(--synapse-chat-radius-sm);
+    padding: 2px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.synapse-theme-dark .synapse-memory-actions {
+    background: var(--synapse-chat-bg-surface);
+}
+
+.synapse-memory-item:hover .synapse-memory-actions {
+    opacity: 1;
+}
+
+.synapse-memory-btn {
+    background: transparent;
+    border: none;
+    color: var(--synapse-chat-text-muted);
+    width: 24px;
+    height: 24px;
+    border-radius: var(--synapse-chat-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+}
+
+.synapse-memory-btn:hover {
+    background: var(--synapse-chat-bg-input);
+    color: var(--synapse-chat-primary);
+}
+
+.synapse-memory-btn.is-danger:hover {
+    color: #ef4444;
+}
+
+/* Mode édition inline */
+.synapse-memory-edit-form {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.synapse-memory-item.is-editing .synapse-memory-edit-form {
+    display: flex;
+}
+
+.synapse-memory-item.is-editing .synapse-memory-item__content,
+.synapse-memory-item.is-editing .synapse-memory-item__meta,
+.synapse-memory-item.is-editing .synapse-memory-actions {
+    display: none;
+}
+
+.synapse-memory-edit-input {
+    width: 100%;
+    min-height: 60px;
+    font-size: 0.8125rem;
+    padding: 8px;
+    border: 1px solid var(--synapse-chat-primary);
+    border-radius: var(--synapse-chat-radius-sm);
+    background: var(--synapse-chat-bg);
+    color: var(--synapse-chat-text);
+    resize: vertical;
+    outline: none;
+}
+
+.synapse-memory-edit-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.synapse-memory-edit-btn {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    border-radius: var(--synapse-chat-radius-sm);
+    cursor: pointer;
+    border: 1px solid transparent;
+}
+
+.synapse-memory-edit-btn--cancel {
+    background: transparent;
+    color: var(--synapse-chat-text-muted);
+}
+
+.synapse-memory-edit-btn--cancel:hover {
+    background: var(--synapse-chat-bg-input);
+}
+
+.synapse-memory-edit-btn--save {
+    background: var(--synapse-chat-primary);
+    color: white;
+}
+
+.synapse-memory-edit-btn--save:hover {
+    background: var(--synapse-chat-primary-hover);
 }
 
 /* ── 4. COLONNE CENTRALE (MAIN) ────────────────────────────────────────── */

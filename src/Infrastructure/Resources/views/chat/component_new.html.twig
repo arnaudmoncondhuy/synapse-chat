@@ -44,6 +44,10 @@
      data-{{ controller_override }}-csrf-url-value="{{ path('synapse_api_csrf_token') }}"
      data-{{ controller_override }}-memory-confirm-url-value="{{ path('synapse_api_memory_confirm') }}"
      data-{{ controller_override }}-memory-reject-url-value="{{ path('synapse_api_memory_reject') }}"
+     data-{{ controller_override }}-memory-list-url-value="{{ path('synapse_api_memory_list') }}"
+     data-{{ controller_override }}-memory-delete-url-template-value="{{ path('synapse_api_memory_delete', {'id': 'MEMORY_ID'}) }}"
+     data-{{ controller_override }}-memory-manual-url-value="{{ path('synapse_api_memory_create_manual') }}"
+     data-{{ controller_override }}-memory-update-url-template-value="{{ path('synapse_api_memory_update', {'id': 'MEMORY_ID'}) }}"
      data-{{ controller_override }}-conversations-url-value="{{ path('synapse_api_conversations_list') }}"
      data-{{ controller_override }}-debug-url-template-value="{{ path('synapse_debug_show', {'id': 'DEBUG_ID'}) }}"
      data-{{ controller_override }}-current-conversation-id-value="{{ currentConversationId }}"
@@ -56,23 +60,53 @@
     {# ── COLONNE GAUCHE : HISTORIQUE ───────────────────────────────────────── #}
     <aside class="synapse-chat-sidebar" data-{{ controller_override }}-target="sidebar">
         <div class="synapse-chat-sidebar__header">
-            <h3 class="synapse-chat-sidebar__title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                Conversations
-            </h3>
+            <div class="synapse-chat-tabs">
+                <button class="synapse-chat-tab active" data-{{ controller_override }}-target="tabConversations" data-action="click->{{ controller_override }}#showConversationsTab">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    Discussions
+                </button>
+                <button class="synapse-chat-tab" data-{{ controller_override }}-target="tabMemory" data-action="click->{{ controller_override }}#showMemoryTab">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
+                    Mémoire
+                </button>
+            </div>
             <button class="synapse-chat-sidebar__close" data-action="click->{{ controller_override }}#closeSidebar" aria-label="Fermer le menu">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
         </div>
 
         <div class="synapse-chat-sidebar__content">
-            <div class="synapse-chat-sidebar__list" data-{{ controller_override }}-target="conversationsList">
-                {# Liste injectée dynamiquement par le JS #}
-                <div class="synapse-chat-sidebar__loading">Chargement...</div>
+            <!-- Onglet Conversations -->
+            <div class="synapse-chat-tab-panel active" data-{{ controller_override }}-target="panelConversations">
+                <div class="synapse-chat-sidebar__list" data-{{ controller_override }}-target="conversationsList">
+                    {# Liste injectée dynamiquement par le JS #}
+                    <div class="synapse-chat-sidebar__loading">Chargement...</div>
+                </div>
+                
+                <div class="synapse-chat-sidebar__empty synapse-hidden" data-{{ controller_override }}-target="conversationsEmpty">
+                    <p>Aucune conversation</p>
+                </div>
             </div>
-            
-            <div class="synapse-chat-sidebar__empty synapse-hidden" data-{{ controller_override }}-target="conversationsEmpty">
-                <p>Aucune conversation</p>
+
+            <!-- Onglet Mémoire -->
+            <div class="synapse-chat-tab-panel synapse-hidden" data-{{ controller_override }}-target="panelMemory">
+                <form class="synapse-memory-add-form" data-action="submit->{{ controller_override }}#addMemory">
+                    <div class="synapse-memory-input-wrapper">
+                        <input type="text" data-{{ controller_override }}-target="memoryInput" placeholder="Nouveau fait à retenir..." class="synapse-memory-input" required>
+                        <button type="submit" class="synapse-memory-submit" title="Ajouter à la mémoire">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        </button>
+                    </div>
+                </form>
+
+                <div class="synapse-chat-sidebar__list" data-{{ controller_override }}-target="memoryList">
+                    {# Liste des souvenirs injectée par JS #}
+                    <div class="synapse-chat-sidebar__loading">Chargement...</div>
+                </div>
+
+                <div class="synapse-chat-sidebar__empty synapse-hidden" data-{{ controller_override }}-target="memoryEmpty">
+                    <p>Aucun souvenir retenu</p>
+                </div>
             </div>
         </div>
 
