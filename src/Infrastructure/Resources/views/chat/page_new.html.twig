@@ -1,0 +1,26 @@
+{% extends '@Synapse/base.html.twig' %}
+
+{% block title %}Assistant IA | Synapse{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+        /* Surcharge pour la page clé en main: Le body doit retirer ses marges par défaut
+           et forcer le chat à prendre 100% de la vue. */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Empêche le scroll global, le composant gère son propre scroll */
+        }
+    </style>
+{% endblock %}
+
+{% block body %}
+    {# 
+       On inclut le composant fluide. 
+       Il prendra automatiquement tout l'espace disponible (100vh grâce au CSS du body ci-dessus) 
+    #}
+    {{ include('@Synapse/chat/component_new.html.twig') }}
+{% endblock %}

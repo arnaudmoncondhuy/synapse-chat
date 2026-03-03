@@ -1,0 +1,178 @@
+{#
+    Synapse Chat Component (Minimalist Organic Design)
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    VARIABLES DISPONIBLES
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    @param array history (optionnel, défaut: [])
+        Historique des messages. Format: [{'role': 'user'|'assistant', 'content': string}]
+    
+    @param string controller_override (optionnel, défaut: 'synapse-chat-new')
+        Nom du controller Stimulus custom
+    
+    @param array attr (optionnel, défaut: {})
+        Attributs HTML supplémentaires pour le conteneur
+    
+    @param bool allow_new_chat (optionnel, défaut: true)
+        Afficher le bouton "Nouvelle conversation"
+    
+    ═══════════════════════════════════════════════════════════════════════════
+    EXEMPLES D'USAGE
+    ═══════════════════════════════════════════════════════════════════════════
+    
+    Intégration dans un layout existant :
+    {{ include('@Synapse/chat/component_new.html.twig') }}
+    
+    ═══════════════════════════════════════════════════════════════════════════
+#}
+
+{# Link the CSS (AssetMapper) #}
+<link rel="stylesheet" href="{{ asset('synapse-chat/styles/synapse_chat_new.css') }}">
+
+{% set history = history|default([]) %}
+{% set controller_override = controller_override|default('synapse-chat-new') %}
+{% set attr = attr|default({}) %}
+{% set allow_new_chat = allow_new_chat|default(true) %}
+{% set mode_class = history is empty ? 'synapse-chat-mode-welcome' : 'synapse-chat-mode-active' %}
+{% set currentConversationId = currentConversationId|default(app.request.query.get('conversation')) %}
+
+<div class="synapse-chat-layout {{ mode_class }}"
+     data-controller="{{ controller_override }}"
+     data-{{ controller_override }}-chat-url-value="{{ path('synapse_api_chat') }}"
+     data-{{ controller_override }}-reset-url-value="{{ path('synapse_api_reset') }}"
+     data-{{ controller_override }}-csrf-url-value="{{ path('synapse_api_csrf_token') }}"
+     data-{{ controller_override }}-memory-confirm-url-value="{{ path('synapse_api_memory_confirm') }}"
+     data-{{ controller_override }}-memory-reject-url-value="{{ path('synapse_api_memory_reject') }}"
+     data-{{ controller_override }}-conversations-url-value="{{ path('synapse_api_conversations_list') }}"
+     data-{{ controller_override }}-debug-url-template-value="{{ path('synapse_debug_show', {'id': 'DEBUG_ID'}) }}"
+     data-{{ controller_override }}-current-conversation-id-value="{{ currentConversationId }}"
+     data-csrf-token="{{ csrf_token('synapse_api') }}"
+     {% for k, v in attr|default({}) %} {{ k }}="{{ v|e('html_attr') }}"{% endfor %}>
+
+    {# Overlay Mobile pour la Sidebar #}
+    <div class="synapse-chat-sidebar-overlay" data-{{ controller_override }}-target="sidebarOverlay" data-action="click->{{ controller_override }}#closeSidebar"></div>
+
+    {# ── COLONNE GAUCHE : HISTORIQUE ───────────────────────────────────────── #}
+    <aside class="synapse-chat-sidebar" data-{{ controller_override }}-target="sidebar">
+        <div class="synapse-chat-sidebar__header">
+            <h3 class="synapse-chat-sidebar__title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                Conversations
+            </h3>
+            <button class="synapse-chat-sidebar__close" data-action="click->{{ controller_override }}#closeSidebar" aria-label="Fermer le menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
+
+        <div class="synapse-chat-sidebar__content">
+            <div class="synapse-chat-sidebar__list" data-{{ controller_override }}-target="conversationsList">
+                {# Liste injectée dynamiquement par le JS #}
+                <div class="synapse-chat-sidebar__loading">Chargement...</div>
+            </div>
+            
+            <div class="synapse-chat-sidebar__empty hidden" data-{{ controller_override }}-target="conversationsEmpty">
+                <p>Aucune conversation</p>
+            </div>
+        </div>
+
+        {% if allow_new_chat %}
+        <div class="synapse-chat-sidebar__footer">
+            <button class="synapse-chat-btn synapse-chat-btn--primary synapse-chat-btn--full" data-action="click->{{ controller_override }}#newConversation">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Nouvelle conversation
+            </button>
+        </div>
+        {% endif %}
+    </aside>
+
+    {# ── COLONNE CENTRALE : CHAT ───────────────────────────────────────────── #}
+    <main class="synapse-chat-main">
+        
+        {# Header Mobile (Visible uniquement sur petits écrans) #}
+        <header class="synapse-chat-main__header">
+            <button class="synapse-chat-btn synapse-chat-btn--icon synapse-chat-sidebar-toggle" data-action="click->{{ controller_override }}#toggleSidebar" aria-label="Ouvrir le menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+            <span class="synapse-chat-main__title">Synapse AI</span>
+            <div class="synapse-chat-main__header-spacer"></div>
+        </header>
+
+        <div class="synapse-chat-messages" data-{{ controller_override }}-target="messages">
+            
+            {# État d'accueil (Nouvelle discussion) #}
+            <div class="synapse-chat-greeting {{ history is not empty ? 'hidden' : '' }}" data-{{ controller_override }}-target="greeting">
+                {% block synapse_greeting_content %}
+                    <div class="synapse-chat-greeting__avatar">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                    </div>
+                    <h1 class="synapse-chat-greeting__title">Bonjour</h1>
+                    <p class="synapse-chat-greeting__subtitle">Comment puis-je vous aider aujourd'hui ?</p>
+                {% endblock %}
+            </div>
+
+            {# Boucle de l'historique #}
+            {% for msg in history %}
+                {% set is_ai = msg.role == 'assistant' or msg.role == 'model' or msg.role == 'MODEL' %}
+                <div class="synapse-chat-message synapse-chat-message--{{ is_ai ? 'assistant' : 'user' }}">
+                    {% if is_ai %}
+                        <div class="synapse-chat-avatar synapse-chat-avatar--ai">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                        </div>
+                    {% endif %}
+                    
+                    <div class="synapse-chat-message__content">
+                        <div class="synapse-chat-bubble">
+                            {% set displayContent = msg.decryptedContent is defined ? msg.decryptedContent : (msg.content is defined ? msg.content : '') %}
+                            {{ displayContent|synapse_markdown }}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        {# Zone de saisie (fixée en bas de la zone centrale) #}
+        <div class="synapse-chat-input-area">
+            <form class="synapse-chat-form" data-action="submit->{{ controller_override }}#send" id="chat-form">
+                <div class="synapse-chat-input-wrapper">
+                    <textarea 
+                        class="synapse-chat-textarea"
+                        data-{{ controller_override }}-target="input" 
+                        placeholder="Posez votre question ou saisissez un prompt..." 
+                        rows="1"
+                        aria-label="Message explicatif"></textarea>
+
+                    <div class="synapse-chat-toolbar">
+                        <div class="synapse-chat-toolbar__left">
+                            {% set tones = synapse_get_tones() %}
+                            {% if tones is not empty %}
+                                <select class="synapse-chat-select" data-{{ controller_override }}-target="toneSelect" aria-label="Sélecteur de ton">
+                                    <option value="">L'assistant (Défaut)</option>
+                                    {% for t in tones %}
+                                        <option value="{{ t.key }}">{{ t.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            {% endif %}
+                        </div>
+
+                        <div class="synapse-chat-toolbar__right">
+                            <button type="submit" class="synapse-chat-btn-send" data-{{ controller_override }}-target="submitBtn" aria-label="Envoyer">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="synapse-chat-disclaimer">
+                    L'IA peut générer des informations incorrectes. Vérifiez les faits importants.
+                </div>
+            </form>
+        </div>
+    </main>
+    
+    {# ── COLONNE DROITE : PLACEHOLDER ──────────────────────────────────────── #}
+    <aside class="synapse-chat-aside" data-{{ controller_override }}-target="aside">
+        {# Utilisable pour l'historique de recherche, réglages additionnels, ou contexte #}
+    </aside>
+
+</div>
