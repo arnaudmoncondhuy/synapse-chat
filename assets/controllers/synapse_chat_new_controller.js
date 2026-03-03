@@ -27,6 +27,7 @@ export default class extends Controller {
     };
 
     connect() {
+        console.log('[Synapse] Chat V2 Controller connected', this.identifier);
         this.scrollToBottom();
         this.inputTarget.focus();
 
