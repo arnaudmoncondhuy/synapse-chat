@@ -186,12 +186,35 @@
                         <div class="synapse-chat-toolbar__left">
                             {% set tones = synapse_get_tones() %}
                             {% if tones is not empty %}
-                                <select class="synapse-chat-select" data-{{ controller_override }}-target="toneSelect" aria-label="Sélecteur de ton">
-                                    <option value="">L'assistant (Défaut)</option>
-                                    {% for t in tones %}
-                                        <option value="{{ t.key }}">{{ t.name }}</option>
-                                    {% endfor %}
-                                </select>
+                                <div class="synapse-chat-tone-picker" data-{{ controller_override }}-target="tonePicker">
+                                    <button type="button" class="synapse-chat-tone-trigger" data-action="click->{{ controller_override }}#toggleToneMenu" data-{{ controller_override }}-target="toneTrigger">
+                                        <span class="synapse-chat-tone-trigger__emoji" data-{{ controller_override }}-target="currentToneEmoji">🤖</span>
+                                        <span class="synapse-chat-tone-trigger__name" data-{{ controller_override }}-target="currentToneName">Assistant</span>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                    </button>
+                                    
+                                    <div class="synapse-chat-tone-menu synapse-hidden" data-{{ controller_override }}-target="toneMenu">
+                                        <div class="synapse-chat-tone-menu__notice">
+                                            Le ton modifie uniquement le style de la réponse, pas la capacité de réflexion de l'IA.
+                                        </div>
+                                        <div class="synapse-chat-tone-option active" data-action="click->{{ controller_override }}#selectTone" data-tone-key="" data-tone-name="Assistant" data-tone-emoji="🤖">
+                                            <span class="synapse-chat-tone-option__emoji">🤖</span>
+                                            <div class="synapse-chat-tone-option__info">
+                                                <div class="synapse-chat-tone-option__name">Assistant (Défaut)</div>
+                                            </div>
+                                        </div>
+                                        {% for t in tones %}
+                                            <div class="synapse-chat-tone-option" data-action="click->{{ controller_override }}#selectTone" data-tone-key="{{ t.key }}" data-tone-name="{{ t.name }}" data-tone-emoji="{{ t.emoji }}">
+                                                <span class="synapse-chat-tone-option__emoji">{{ t.emoji }}</span>
+                                                <div class="synapse-chat-tone-option__info">
+                                                    <div class="synapse-chat-tone-option__name">{{ t.name }}</div>
+                                                    <div class="synapse-chat-tone-option__desc">{{ t.description }}</div>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                    <input type="hidden" name="tone" value="" data-{{ controller_override }}-target="toneInput">
+                                </div>
                             {% endif %}
                         </div>
 

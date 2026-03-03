@@ -9,7 +9,8 @@ import { Controller } from '@hotwired/stimulus';
 export default class extends Controller {
     static targets = [
         // Zone Chat Principal
-        'messages', 'input', 'submitBtn', 'toneSelect', 'greeting',
+        'messages', 'input', 'submitBtn', 'greeting',
+        'tonePicker', 'toneTrigger', 'toneMenu', 'currentToneEmoji', 'currentToneName', 'toneInput',
         // Zone Sidebar
         'sidebar', 'sidebarOverlay', 'conversationsList', 'conversationsEmpty',
         // Onglets et mémoire
@@ -45,6 +46,10 @@ export default class extends Controller {
             this.inputTarget.addEventListener('input', this.onInput);
         }
 
+        // Écouteur pour fermer le menu des tons si on clique ailleurs
+        this.onClickOutside = this.closeToneMenuOutside.bind(this);
+        document.addEventListener('click', this.onClickOutside);
+
         const urlParams = new URLSearchParams(window.location.search);
         this.isDebugMode = urlParams.has('debug') || this.debugValue;
 
@@ -53,6 +58,9 @@ export default class extends Controller {
 
         // Charger la liste des conversations (Sidebar)
         this.loadConversations();
+
+        // Charger le ton persistant
+        this.loadPersistentTone();
     }
 
     disconnect() {
@@ -60,6 +68,7 @@ export default class extends Controller {
             this.inputTarget.removeEventListener('keydown', this.onKeydown);
             this.inputTarget.removeEventListener('input', this.onInput);
         }
+        document.removeEventListener('click', this.onClickOutside);
     }
 
     /* ── 1. GESTION DE LA SIDEBAR (MOBILE & LAYOUTS CONTRAINTS) ────── */
@@ -304,7 +313,7 @@ export default class extends Controller {
         this.setLoading(true);
         this.pendingMemoryProposal = null;
 
-        const tone = this.hasToneSelectTarget ? this.toneSelectTarget.value : null;
+        const tone = this.hasToneInputTarget ? this.toneInputTarget.value : null;
         const csrfToken = await this.ensureCsrfToken();
         const headers = { 'Content-Type': 'application/json' };
         if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
@@ -744,6 +753,71 @@ export default class extends Controller {
             alert("Erreur lors de la mise à jour.");
         } finally {
             btn.disabled = false;
+        }
+    }
+
+    /* ── 4.5. SÉLECTEUR DE TONS ────────────────────────────────────────────── */
+
+    toggleToneMenu(event) {
+        if (event) event.stopPropagation();
+        if (this.hasToneMenuTarget) {
+            this.toneMenuTarget.classList.toggle('synapse-hidden');
+            this.toneTriggerTarget.classList.toggle('is-open');
+        }
+    }
+
+    selectTone(event) {
+        const { toneKey, toneName, toneEmoji } = event.currentTarget.dataset;
+
+        // Mise à jour de l'UI du trigger
+        if (this.hasCurrentToneEmojiTarget) this.currentToneEmojiTarget.textContent = toneEmoji;
+        if (this.hasCurrentToneNameTarget) this.currentToneNameTarget.textContent = toneName;
+        if (this.hasToneInputTarget) this.toneInputTarget.value = toneKey;
+
+        // Mise à jour de l'état "active" dans le menu
+        if (this.hasToneMenuTarget) {
+            this.toneMenuTarget.querySelectorAll('.synapse-chat-tone-option').forEach(opt => {
+                opt.classList.toggle('active', opt.dataset.toneKey === toneKey);
+            });
+        }
+
+        // Sauvegarde persistante
+        this.savePersistentTone(toneKey, toneName, toneEmoji);
+
+        // Fermer le menu
+        this.toggleToneMenu();
+    }
+
+    closeToneMenuOutside(event) {
+        if (!this.hasTonePickerTarget) return;
+        if (!this.tonePickerTarget.contains(event.target)) {
+            if (this.hasToneMenuTarget && !this.toneMenuTarget.classList.contains('synapse-hidden')) {
+                this.toggleToneMenu();
+            }
+        }
+    }
+
+    savePersistentTone(key, name, emoji) {
+        localStorage.setItem('synapse_chat_tone', JSON.stringify({ key, name, emoji }));
+    }
+
+    loadPersistentTone() {
+        const saved = localStorage.getItem('synapse_chat_tone');
+        if (saved) {
+            try {
+                const { key, name, emoji } = JSON.parse(saved);
+                if (this.hasCurrentToneEmojiTarget) this.currentToneEmojiTarget.textContent = emoji;
+                if (this.hasCurrentToneNameTarget) this.currentToneNameTarget.textContent = name;
+                if (this.hasToneInputTarget) this.toneInputTarget.value = key;
+
+                if (this.hasToneMenuTarget) {
+                    this.toneMenuTarget.querySelectorAll('.synapse-chat-tone-option').forEach(opt => {
+                        opt.classList.toggle('active', opt.dataset.toneKey === key);
+                    });
+                }
+            } catch (e) {
+                console.error('Erreur lors du chargement du ton persistant', e);
+            }
         }
     }
 
