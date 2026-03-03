@@ -38,22 +38,17 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
             ],
         ]);
 
-        // Enregistrement des assets chat dans AssetMapper via le chemin vendor.
-        // Fonctionne pour les deux contextes :
-        // - Path repositories : vendor contient un symlink vers /synapse-bundle/...
-        // - Packagist : vendor contient une copie complète
-        // AssetMapper nécessite un chemin accessible au serveur HTTP (dans /app/...)
-        if ($container->hasExtension('framework')) {
-            $vendorAssetsDir = \dirname(__DIR__, 5) . '/vendor/arnaudmoncondhuy/synapse-chat/assets';
-            if (is_dir($vendorAssetsDir)) {
-                $container->prependExtensionConfig('framework', [
-                    'asset_mapper' => [
-                        'paths' => [
-                            $vendorAssetsDir => 'synapse-chat',
-                        ],
+        // Enregistrement des assets chat dans AssetMapper.
+        // Utilisation d'un chemin robuste remontant à la racine du bundle.
+        $assetsDir = \dirname(__DIR__, 3) . '/assets';
+        if ($container->hasExtension('framework') && is_dir($assetsDir)) {
+            $container->prependExtensionConfig('framework', [
+                'asset_mapper' => [
+                    'paths' => [
+                        $assetsDir => 'synapse-chat',
                     ],
-                ]);
-            }
+                ],
+            ]);
         }
     }
 
