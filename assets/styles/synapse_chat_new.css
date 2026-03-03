@@ -1198,14 +1198,34 @@
     position: absolute;
     bottom: calc(100% + 12px);
     left: 0;
-    width: 240px;
+    width: 250px;
+    max-height: 350px;
     background: var(--synapse-chat-bg);
     border: 1px solid var(--synapse-chat-border);
     border-radius: var(--synapse-chat-radius-lg);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
     z-index: 1000;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     animation: synapseFadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Custom Scrollbar */
+.synapse-chat-tone-menu::-webkit-scrollbar {
+    width: 6px;
+}
+
+.synapse-chat-tone-menu::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.synapse-chat-tone-menu::-webkit-scrollbar-thumb {
+    background: var(--synapse-chat-border);
+    border-radius: 4px;
+}
+
+.synapse-chat-tone-menu::-webkit-scrollbar-thumb:hover {
+    background: var(--synapse-chat-border-hover);
 }
 
 .synapse-theme-dark .synapse-chat-tone-menu {

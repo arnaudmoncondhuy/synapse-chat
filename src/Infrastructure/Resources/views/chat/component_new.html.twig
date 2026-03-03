@@ -40,6 +40,7 @@
 <div class="synapse-chat-layout {{ mode_class }}"
      data-controller="{{ controller_override }}"
      data-{{ controller_override }}-chat-url-value="{{ path('synapse_api_chat') }}"
+     data-{{ controller_override }}-api-url-value="{{ path('synapse_chat_api_ask') }}"
      data-{{ controller_override }}-reset-url-value="{{ path('synapse_api_reset') }}"
      data-{{ controller_override }}-csrf-url-value="{{ path('synapse_api_csrf_token') }}"
      data-{{ controller_override }}-memory-confirm-url-value="{{ path('synapse_api_memory_confirm') }}"
@@ -49,9 +50,10 @@
      data-{{ controller_override }}-memory-manual-url-value="{{ path('synapse_api_memory_create_manual') }}"
      data-{{ controller_override }}-memory-update-url-template-value="{{ path('synapse_api_memory_update', {'id': 'MEMORY_ID'}) }}"
      data-{{ controller_override }}-conversations-url-value="{{ path('synapse_api_conversations_list') }}"
-     data-{{ controller_override }}-debug-url-template-value="{{ path('synapse_debug_show', {'id': 'DEBUG_ID'}) }}"
      data-{{ controller_override }}-current-conversation-id-value="{{ currentConversationId }}"
-     data-{{ controller_override }}-debug-value="{{ debug_mode|default(false) ? 'true' : 'false' }}"
+     data-{{ controller_override }}-debug-url-template-value="{{ path('synapse_debug_show', {'id': 'DEBUG_ID'}) }}"
+     data-{{ controller_override }}-debug-value="{{ (debug_mode|default(false) and synapse_can_debug()) ? 'true' : 'false' }}"
+     data-{{ controller_override }}-stateless-value="{{ app.request.query.get('stateless', false) ? 'true' : 'false' }}"
      data-csrf-token="{{ csrf_token('synapse_api') }}"
      {% for k, v in attr|default({}) %} {{ k }}="{{ v|e('html_attr') }}"{% endfor %}>
 
@@ -161,9 +163,9 @@
                             {% set displayContent = msg.decryptedContent is defined ? msg.decryptedContent : (msg.content is defined ? msg.content : '') %}
                             {{ displayContent|synapse_markdown }}
                         </div>
-                        {% if is_ai and debug_mode|default(false) and msg.metadata.debug_id is defined %}
+                        {% if is_ai and debug_mode|default(false) and synapse_can_debug() and msg.metadata.debug_id is defined %}
                             <button type="button" class="synapse-chat-debug-btn" data-action="click->{{ controller_override }}#showDebug" data-debug-id="{{ msg.metadata.debug_id }}" title="Voir le debug">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 2 8 8-8 8"></path><path d="M12 18h.01"></path></svg>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bug"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg>
                             </button>
                         {% endif %}
                     </div>
@@ -187,9 +189,9 @@
                             {% set tones = synapse_get_tones() %}
                             {% if tones is not empty %}
                                 <div class="synapse-chat-tone-picker" data-{{ controller_override }}-target="tonePicker">
-                                    <button type="button" class="synapse-chat-tone-trigger" data-action="click->{{ controller_override }}#toggleToneMenu" data-{{ controller_override }}-target="toneTrigger">
-                                        <span class="synapse-chat-tone-trigger__emoji" data-{{ controller_override }}-target="currentToneEmoji">🤖</span>
-                                        <span class="synapse-chat-tone-trigger__name" data-{{ controller_override }}-target="currentToneName">Assistant</span>
+                                    <button type="button" class="synapse-chat-tone-trigger" data-action="click->{{ controller_override }}#toggleToneMenu" data-{{ controller_override }}-target="toneTrigger" aria-label="Choisir une personnalité">
+                                        <span class="synapse-chat-tone-trigger__emoji" data-{{ controller_override }}-target="currentToneEmoji">✨</span>
+                                        <span class="synapse-chat-tone-trigger__name" data-{{ controller_override }}-target="currentToneName">Personnalité</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                                     </button>
                                     
@@ -197,10 +199,10 @@
                                         <div class="synapse-chat-tone-menu__notice">
                                             Le ton modifie uniquement le style de la réponse, pas la capacité de réflexion de l'IA.
                                         </div>
-                                        <div class="synapse-chat-tone-option active" data-action="click->{{ controller_override }}#selectTone" data-tone-key="" data-tone-name="Assistant" data-tone-emoji="🤖">
-                                            <span class="synapse-chat-tone-option__emoji">🤖</span>
+                                        <div class="synapse-chat-tone-option active" data-action="click->{{ controller_override }}#selectTone" data-tone-key="" data-tone-name="Personnalité" data-tone-emoji="✨">
+                                            <span class="synapse-chat-tone-option__emoji">✨</span>
                                             <div class="synapse-chat-tone-option__info">
-                                                <div class="synapse-chat-tone-option__name">Assistant (Défaut)</div>
+                                                <div class="synapse-chat-tone-option__name">Normal (Par défaut)</div>
                                             </div>
                                         </div>
                                         {% for t in tones %}
