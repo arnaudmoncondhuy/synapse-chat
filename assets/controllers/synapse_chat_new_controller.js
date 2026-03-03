@@ -159,10 +159,10 @@ export default class extends Controller {
                     </div>
                     
                     <div class="synapse-chat-conv-actions">
-                        <button type="button" class="synapse-chat-conv-btn" data-action="click->${this.identifier}#startRename:stop" aria-label="Renommer">
+                        <button type="button" class="synapse-btn-small" data-action="click->${this.identifier}#startRename:stop" aria-label="Renommer">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                         </button>
-                        <button type="button" class="synapse-chat-conv-btn is-danger" data-action="click->${this.identifier}#deleteConversation:stop" aria-label="Supprimer">
+                        <button type="button" class="synapse-btn-small is-danger" data-action="click->${this.identifier}#deleteConversation:stop" aria-label="Supprimer">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         </button>
                     </div>
@@ -302,6 +302,7 @@ export default class extends Controller {
         this.inputTarget.value = '';
         this.inputTarget.style.height = 'auto';
         this.setLoading(true);
+        this.pendingMemoryProposal = null;
 
         const tone = this.hasToneSelectTarget ? this.toneSelectTarget.value : null;
         const csrfToken = await this.ensureCsrfToken();
@@ -399,7 +400,10 @@ export default class extends Controller {
                                 break streamLoop;
                             } else if (evt.type === 'tool_executed') {
                                 if (evt.payload?.tool === 'propose_to_remember' && evt.payload?.proposal) {
-                                    this.showMemoryProposal(evt.payload.proposal, evt.payload.conversation_id || this.currentConversationIdValue);
+                                    this.pendingMemoryProposal = {
+                                        proposal: evt.payload.proposal,
+                                        conversationId: evt.payload.conversation_id || this.currentConversationIdValue
+                                    };
                                 }
                             }
                         } catch (e) { /* Ligne partielle, on ignore silencieusement */ }
@@ -412,6 +416,12 @@ export default class extends Controller {
                 } else if (!receivedResult && currentResponseText === '') {
                     this.setLoading(false);
                     this.addMessage('⚠️ Réponse vide du serveur.', 'assistant');
+                }
+
+                // Afficher l'encart de mémorisation à la fin du message principal pour plus de cohérence
+                if (this.pendingMemoryProposal) {
+                    this.showMemoryProposal(this.pendingMemoryProposal.proposal, this.pendingMemoryProposal.conversationId);
+                    this.pendingMemoryProposal = null;
                 }
             } finally {
                 clearTimeout(streamTimeout);
@@ -574,10 +584,10 @@ export default class extends Controller {
                     </div>
                     
                     <div class="synapse-memory-actions">
-                        <button type="button" class="synapse-memory-btn" data-action="click->${this.identifier}#editMemory" aria-label="Éditer">
+                        <button type="button" class="synapse-btn-small" data-action="click->${this.identifier}#editMemory" aria-label="Éditer">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
                         </button>
-                        <button type="button" class="synapse-memory-btn is-danger" data-action="click->${this.identifier}#deleteMemory" aria-label="Supprimer">
+                        <button type="button" class="synapse-btn-small is-danger" data-action="click->${this.identifier}#deleteMemory" aria-label="Supprimer">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         </button>
                     </div>

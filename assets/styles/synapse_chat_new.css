@@ -249,7 +249,8 @@
     display: flex;
 }
 
-.synapse-chat-conv-btn {
+/* Petits boutons d'action (utilisés dans sidebar conversations & mémoire) */
+.synapse-btn-small {
     background: var(--synapse-chat-bg-surface);
     border: 1px solid var(--synapse-chat-border);
     color: var(--synapse-chat-text-muted);
@@ -261,12 +262,27 @@
     justify-content: center;
     cursor: pointer;
     padding: 0;
+    transition: all 0.2s;
 }
 
-.synapse-chat-conv-btn:hover {
+.synapse-btn-small:hover {
     background: var(--synapse-chat-primary);
     color: #fff;
     border-color: var(--synapse-chat-primary);
+}
+
+.synapse-btn-small.is-danger:hover {
+    background: #ef4444;
+    border-color: #ef4444;
+    color: #fff;
+}
+
+.synapse-theme-dark .synapse-btn-small {
+    background: var(--synapse-chat-bg-input);
+}
+
+.synapse-theme-dark .synapse-btn-small:hover {
+    background: var(--synapse-chat-primary);
 }
 
 /* ── 3.1. ONGLETS (TABS) ────────────────────────────────────────────────── */
@@ -437,29 +453,6 @@
     opacity: 1;
 }
 
-.synapse-memory-btn {
-    background: transparent;
-    border: none;
-    color: var(--synapse-chat-text-muted);
-    width: 24px;
-    height: 24px;
-    border-radius: var(--synapse-chat-radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    padding: 0;
-}
-
-.synapse-memory-btn:hover {
-    background: var(--synapse-chat-bg-input);
-    color: var(--synapse-chat-primary);
-}
-
-.synapse-memory-btn.is-danger:hover {
-    color: #ef4444;
-}
-
 /* Mode édition inline */
 .synapse-memory-edit-form {
     display: none;
@@ -596,6 +589,7 @@
     margin: 0;
     background: linear-gradient(135deg, var(--synapse-chat-primary), #8b5cf6);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -1131,5 +1125,9 @@
 }
 
 .hidden {
+    display: none !important;
+}
+
+.synapse-hidden {
     display: none !important;
 }
