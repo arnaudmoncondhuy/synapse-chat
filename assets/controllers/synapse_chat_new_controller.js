@@ -97,13 +97,18 @@ export default class extends Controller {
     }
 
     renderConversations(conversations) {
+        console.log('[Synapse] renderConversations', conversations.length, 'targets:', {
+            list: this.hasConversationsListTarget,
+            empty: this.hasConversationsEmptyTarget
+        });
+
         if (conversations.length === 0) {
-            if (this.hasConversationsEmptyTarget) this.conversationsEmptyTarget.classList.remove('hidden');
+            if (this.hasConversationsEmptyTarget) this.conversationsEmptyTarget.classList.remove('synapse-hidden');
             if (this.hasConversationsListTarget) this.conversationsListTarget.innerHTML = '';
             return;
         }
 
-        if (this.hasConversationsEmptyTarget) this.conversationsEmptyTarget.classList.add('hidden');
+        if (this.hasConversationsEmptyTarget) this.conversationsEmptyTarget.classList.add('synapse-hidden');
 
         const html = conversations.map(conv => {
             const isActive = String(conv.id) === String(this.currentConversationIdValue);
@@ -251,7 +256,7 @@ export default class extends Controller {
         // Passage du mode Accueil (Welcome) au mode Chat Actif
         this.element.classList.remove('synapse-chat-mode-welcome');
         this.element.classList.add('synapse-chat-mode-active');
-        if (this.hasGreetingTarget) this.greetingTarget.classList.add('hidden');
+        if (this.hasGreetingTarget) this.greetingTarget.classList.add('synapse-hidden');
 
         // Ajouter message utilisateur
         this.addMessage(message, 'user');

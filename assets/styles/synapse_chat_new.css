@@ -161,6 +161,31 @@
     border-top: 1px solid var(--synapse-chat-border);
 }
 
+.synapse-chat-sidebar__loading,
+.synapse-chat-sidebar__empty {
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--synapse-chat-text-muted);
+    font-size: 0.875rem;
+}
+
+.synapse-chat-sidebar__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.synapse-chat-sidebar__loading::before {
+    content: '';
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--synapse-chat-primary-alpha-10);
+    border-top-color: var(--synapse-chat-primary);
+    border-radius: 50%;
+    animation: synapseSpin 1s linear infinite;
+}
+
 /* ── Éléments de la liste des conversations ── */
 .synapse-chat-conv-item {
     display: flex;
