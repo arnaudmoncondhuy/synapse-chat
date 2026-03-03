@@ -15,3 +15,6 @@ services:
   # ── Chat UI Controller (Full page) ────────────────────────────────────────
   ArnaudMoncondhuy\SynapseChat\Infrastructure\Controller\ChatUiController:
     tags: ['controller.service_arguments']
+
+  ArnaudMoncondhuy\SynapseChat\Infrastructure\Controller\ChatV2UiController:
+    tags: ['controller.service_arguments']
