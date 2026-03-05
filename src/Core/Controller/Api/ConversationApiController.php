@@ -20,8 +20,7 @@ class ConversationApiController extends AbstractController
 {
     public function __construct(
         private ConversationManager $conversationManager
-    ) {
-    }
+    ) {}
 
     /**
      * Liste les conversations de l'utilisateur
@@ -46,7 +45,7 @@ class ConversationApiController extends AbstractController
             'message_count' => $conv->getMessageCount(),
         ], $conversations);
 
-        return new JsonResponse($data);
+        return new JsonResponse(['conversations' => $data]);
     }
 
     /**
