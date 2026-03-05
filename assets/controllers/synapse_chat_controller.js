@@ -448,7 +448,7 @@ export default class extends Controller {
                     this.pendingMemoryProposal = null;
                 }
             } finally {
-                clearTimeout(streamTimeout);
+                clearTimeout(timeoutId);
             }
 
         } catch (error) {
