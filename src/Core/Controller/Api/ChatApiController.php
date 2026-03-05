@@ -206,14 +206,20 @@ class ChatApiController extends AbstractController
                         $this->conversationManager->saveMessage($conversation, MessageRole::USER, $message);
                     }
 
-                    // Save assistant message + log LLM call
                     if (!empty($result['answer'])) {
                         $usage = $result['usage'] ?? [];
+                        $safetyRatings = [];
+                        foreach ($result['safety'] ?? [] as $rating) {
+                            if (isset($rating['category'])) {
+                                $safetyRatings[$rating['category']] = $rating;
+                            }
+                        }
+
                         $metadata = [
                             'prompt_tokens'     => $usage['prompt_tokens'] ?? 0,
                             'completion_tokens' => $usage['completion_tokens'] ?? 0,
                             'thinking_tokens'   => $usage['thinking_tokens'] ?? 0,
-                            'safety_ratings'    => $result['safety'] ?? null,
+                            'safety_ratings'    => $safetyRatings,
                             'model'             => $result['model'] ?? null,
                             'preset_id'         => $result['preset_id'] ?? null,
                             'metadata'          => ['debug_id' => $result['debug_id'] ?? null],
