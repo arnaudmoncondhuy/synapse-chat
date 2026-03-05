@@ -45,7 +45,7 @@ class ConversationApiController extends AbstractController
             'message_count' => $conv->getMessageCount(),
         ], $conversations);
 
-        return new JsonResponse(['conversations' => $data]);
+        return new JsonResponse($data);
     }
 
     /**
