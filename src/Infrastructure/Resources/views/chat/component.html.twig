@@ -1,7 +1,5 @@
 {#
-    Synapse Chat Component (Gemini-Inspired Design)
-    
-    ⚠️ DESIGN PRÉSERVÉ : Ce composant reproduit fidèlement l'interface de Google Gemini.
+    Synapse Chat Component (Minimalist Organic Design)
     
     ═══════════════════════════════════════════════════════════════════════════
     VARIABLES DISPONIBLES
@@ -10,155 +8,245 @@
     @param array history (optionnel, défaut: [])
         Historique des messages. Format: [{'role': 'user'|'assistant', 'content': string}]
     
-    @param string controller_override (optionnel, défaut: 'synapse--chat')
+    @param string controller_override (optionnel, défaut: 'synapse-chat')
         Nom du controller Stimulus custom
     
     @param array attr (optionnel, défaut: {})
         Attributs HTML supplémentaires pour le conteneur
     
-    @param bool allow_new_chat (optionnel, défaut: false)
+    @param bool allow_new_chat (optionnel, défaut: true)
         Afficher le bouton "Nouvelle conversation"
     
     ═══════════════════════════════════════════════════════════════════════════
     EXEMPLES D'USAGE
     ═══════════════════════════════════════════════════════════════════════════
     
-    1. Plug-and-play : {{ include('@Synapse/chat/component.html.twig') }}
-    2. Avec historique : {{ include('@Synapse/chat/component.html.twig', {'history': messages}) }}
-    3. Controller custom : {{ include('@Synapse/chat/component.html.twig', {
-           'controller_override': 'myapp--chat',
-           'attr': {'data-room-id': '123'}
-       }) }}
+    Intégration dans un layout existant :
+    {{ include('@Synapse/chat/component.html.twig') }}
     
-    Voir VIEWS_INTEGRATION.md pour plus d'exemples.
     ═══════════════════════════════════════════════════════════════════════════
 #}
 
 {# Link the CSS (AssetMapper) #}
-<link rel="stylesheet" href="{{ asset('synapse-chat/styles/synapse.css') }}">
-
-{# Global SVG Definitions (Gemini Gradients) #}
-<svg style="width:0;height:0;position:absolute;overflow:hidden;" aria-hidden="true" focusable="false">
-    <defs>
-        <linearGradient id="gemini-gradient" gradientunits="objectBoundingBox" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stop-color="rgb(52,107,241)"></stop>
-            <stop offset="22%" stop-color="rgb(50,121,248)"></stop>
-            <stop offset="45%" stop-color="rgb(49,134,255)"></stop>
-            <stop offset="72%" stop-color="rgb(64,147,255)"></stop>
-            <stop offset="99%" stop-color="rgb(79,160,255)"></stop>
-        </linearGradient>
-        <symbol id="gemini-icon" viewbox="0 0 32 32">
-            <path d="M-3.9000000953674316,-84.94999694824219 C-5.28000020980835,-79.47000122070312 -7.079999923706055,-74.13999938964844 -9.319999694824219,-68.93000030517578 C-15.15999984741211,-55.369998931884766 -23.15999984741211,-43.5 -33.33000183105469,-33.33000183105469 C-43.5,-23.170000076293945 -55.369998931884766,-15.15999984741211 -68.93000030517578,-9.319999694824219 C-74.12999725341797,-7.079999923706055 -79.47000122070312,-5.28000020980835 -84.94999694824219,-3.9000000953674316 C-86.73999786376953,-3.450000047683716 -88,-1.850000023841858 -88,0 C-88,1.850000023841858 -86.73999786376953,3.450000047683716 -84.94999694824219,3.9000000953674316 C-79.47000122070312,5.28000020980835 -74.13999938964844,7.079999923706055 -68.93000030517578,9.319999694824219 C-55.369998931884766,15.15999984741211 -43.5099983215332,23.15999984741211 -33.33000183105469,33.33000183105469 C-23.15999984741211,43.5 -15.149999618530273,55.369998931884766 -9.319999694824219,68.93000030517578 C-7.079999923706055,74.12999725341797 -5.28000020980835,79.47000122070312 -3.9000000953674316,84.94999694824219 C-3.450000047683716,86.73999786376953 -1.840000033378601,88 0,88 C1.850000023841858,88 3.450000047683716,86.73999786376953 3.9000000953674316,84.94999694824219 C5.28000020980835,79.47000122070312 7.079999923706055,74.13999938964844 9.319999694824219,68.93000030517578 C15.15999984741211,55.369998931884766 23.15999984741211,43.5099983215332 33.33000183105469,33.33000183105469 C43.5,23.15999984741211 55.369998931884766,15.149999618530273 68.93000030517578,9.319999694824219 C74.12999725341797,7.079999923706055 79.47000122070312,5.28000020980835 84.94999694824219,3.9000000953674316 C86.73999786376953,3.450000047683716 88,1.840000033378601 88,0 C88,-1.850000023841858 86.73999786376953,-3.450000047683716 84.94999694824219,-3.9000000953674316 C79.47000122070312,-5.28000020980835 74.13999938964844,-7.079999923706055 68.93000030517578,-9.319999694824219 C55.369998931884766,-15.15999984741211 43.5099983215332,-23.15999984741211 33.33000183105469,-33.33000183105469 C23.15999984741211,-43.5 15.149999618530273,-55.369998931884766 9.319999694824219,-68.93000030517578 C7.079999923706055,-74.12999725341797 5.28000020980835,-79.47000122070312 3.9000000953674316,-84.94999694824219 C3.450000047683716,-86.73999786376953 1.850000023841858,-88 0,-88 C-1.850000023841858,-88 -3.450000047683716,-86.73999786376953 -3.9000000953674316,-84.94999694824219z" transform="matrix(0.1248,0,0,0.1248,4.98,4.98) translate(88.25,88.25)"></path>
-        </symbol>
-    </defs>
-</svg>
+<link rel="stylesheet" href="{{ asset('synapse-chat/styles/synapse_chat.css') }}">
 
 {% set history = history|default([]) %}
 {% set controller_override = controller_override|default('synapse-chat') %}
 {% set attr = attr|default({}) %}
-{% set allow_new_chat = allow_new_chat|default(false) %}
-{% set mode_class = history is empty ? 'mode-welcome' : 'mode-chat' %}
+{% set allow_new_chat = allow_new_chat|default(true) %}
+{% set mode_class = history is empty ? 'synapse-chat-mode-welcome' : 'synapse-chat-mode-active' %}
+{% set currentConversationId = currentConversationId|default(app.request.query.get('conversation')) %}
 
-<div id="synapse-chat-container"
-     class="synapse-fullscreen-container {{ mode_class }}"
-     data-controller="{{ controller_override|default('synapse-chat') }}"
-     data-{{ controller_override|default('synapse-chat') }}-target="container"
-     data-{{ controller_override|default('synapse-chat') }}-chat-url-value="{{ path('synapse_api_chat') }}"
-     data-{{ controller_override|default('synapse-chat') }}-reset-url-value="{{ path('synapse_api_reset') }}"
-     data-{{ controller_override|default('synapse-chat') }}-csrf-url-value="{{ path('synapse_api_csrf_token') }}"
-     data-{{ controller_override|default('synapse-chat') }}-memory-confirm-url-value="{{ path('synapse_api_memory_confirm') }}"
-     data-{{ controller_override|default('synapse-chat') }}-memory-reject-url-value="{{ path('synapse_api_memory_reject') }}"
-     data-{{ controller_override|default('synapse-chat') }}-debug-url-template-value="{{ path('synapse_debug_show', {'id': 'DEBUG_ID'}) }}"
+<div class="synapse-chat-layout {{ mode_class }}"
+     data-controller="{{ controller_override }}"
+     data-{{ controller_override }}-chat-url-value="{{ path('synapse_api_chat') }}"
+     data-{{ controller_override }}-api-url-value="{{ path('synapse_api_chat') }}"
+     data-{{ controller_override }}-reset-url-value="{{ path('synapse_api_reset') }}"
+     data-{{ controller_override }}-csrf-url-value="{{ path('synapse_api_csrf_token') }}"
+     data-{{ controller_override }}-memory-confirm-url-value="{{ path('synapse_api_memory_confirm') }}"
+     data-{{ controller_override }}-memory-reject-url-value="{{ path('synapse_api_memory_reject') }}"
+     data-{{ controller_override }}-memory-list-url-value="{{ path('synapse_api_memory_list') }}"
+     data-{{ controller_override }}-memory-delete-url-template-value="{{ path('synapse_api_memory_delete', {'id': 'MEMORY_ID'}) }}"
+     data-{{ controller_override }}-memory-manual-url-value="{{ path('synapse_api_memory_create_manual') }}"
+     data-{{ controller_override }}-memory-update-url-template-value="{{ path('synapse_api_memory_update', {'id': 'MEMORY_ID'}) }}"
+     data-{{ controller_override }}-conversations-url-value="{{ path('synapse_api_conversations_list') }}"
+     data-{{ controller_override }}-current-conversation-id-value="{{ currentConversationId }}"
+     data-{{ controller_override }}-debug-url-template-value="{{ path('synapse_debug_show', {'id': 'DEBUG_ID'}) }}"
+     data-{{ controller_override }}-debug-value="{{ (debug_mode|default(false) and synapse_can_debug()) ? 'true' : 'false' }}"
+     data-{{ controller_override }}-stateless-value="{{ app.request.query.get('stateless', false) ? 'true' : 'false' }}"
      data-csrf-token="{{ csrf_token('synapse_api') }}"
      {% for k, v in attr|default({}) %} {{ k }}="{{ v|e('html_attr') }}"{% endfor %}>
 
-    <div class="synapse-chat">
+    {# Overlay Mobile pour la Sidebar #}
+    <div class="synapse-chat-sidebar-overlay" data-{{ controller_override }}-target="sidebarOverlay" data-action="click->{{ controller_override }}#closeSidebar"></div>
 
-        {# 1. Header (Optional Override) #}
-        {% block synapse_header %}{% endblock %}
+    {# ── COLONNE GAUCHE : HISTORIQUE ───────────────────────────────────────── #}
+    <aside class="synapse-chat-sidebar" data-{{ controller_override }}-target="sidebar">
+        <div class="synapse-chat-sidebar__header">
+            <div class="synapse-chat-tabs">
+                <button class="synapse-chat-tab active" data-{{ controller_override }}-target="tabConversations" data-action="click->{{ controller_override }}#showConversationsTab">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    Discussions
+                </button>
+                <button class="synapse-chat-tab" data-{{ controller_override }}-target="tabMemory" data-action="click->{{ controller_override }}#showMemoryTab">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
+                    Mémoire
+                </button>
+            </div>
+            <button class="synapse-chat-sidebar__close synapse-btn-small" data-action="click->{{ controller_override }}#closeSidebar" aria-label="Fermer le menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
 
-        {# 2. Messages Area #}
-        <div class="synapse-chat__messages" data-{{ controller_override|default('synapse-chat') }}-target="messages">
-            
-            {# 2a. Welcome/Empty State #}
-            <div id="welcome-greeting" class="assistant-empty-state {{ history is not empty ? 'hidden' : '' }}" data-{{ controller_override|default('synapse-chat') }}-target="greeting">
-                {% block synapse_greeting_content %}
-                    <div class="greeting-title">
-                        <div class="avatar-ai">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 32 32"><use href="#gemini-icon" fill="url(#gemini-gradient)"></use></svg>
-                        </div>
-                        <span>Bonjour</span>
+        <div class="synapse-chat-sidebar__content">
+            <!-- Onglet Conversations -->
+            <div class="synapse-chat-tab-panel active" data-{{ controller_override }}-target="panelConversations">
+                <div class="synapse-chat-sidebar__list" data-{{ controller_override }}-target="conversationsList">
+                    {# Liste injectée dynamiquement par le JS #}
+                    <div class="synapse-chat-sidebar__loading">Chargement...</div>
+                </div>
+                
+                <div class="synapse-chat-sidebar__empty synapse-hidden" data-{{ controller_override }}-target="conversationsEmpty">
+                    <p>Aucune conversation</p>
+                </div>
+            </div>
+
+            <!-- Onglet Mémoire -->
+            <div class="synapse-chat-tab-panel synapse-hidden" data-{{ controller_override }}-target="panelMemory">
+                <form class="synapse-memory-add-form" data-action="submit->{{ controller_override }}#addMemory">
+                    <div class="synapse-memory-input-wrapper">
+                        <input type="text" data-{{ controller_override }}-target="memoryInput" placeholder="Nouveau fait à retenir..." class="synapse-memory-input" required>
+                        <button type="submit" class="synapse-memory-submit" title="Ajouter à la mémoire">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        </button>
                     </div>
-                    <h1 class="greeting-subtitle">Comment puis-je vous aider ?</h1>
+                </form>
+
+                <div class="synapse-chat-sidebar__list" data-{{ controller_override }}-target="memoryList">
+                    {# Liste des souvenirs injectée par JS #}
+                    <div class="synapse-chat-sidebar__loading">Chargement...</div>
+                </div>
+
+                <div class="synapse-chat-sidebar__empty synapse-hidden" data-{{ controller_override }}-target="memoryEmpty">
+                    <p>Aucun souvenir retenu</p>
+                </div>
+            </div>
+        </div>
+
+        {% if allow_new_chat %}
+        <div class="synapse-chat-sidebar__footer">
+            <button class="synapse-chat-btn synapse-chat-btn--primary synapse-chat-btn--full" data-action="click->{{ controller_override }}#newConversation">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Nouvelle conversation
+            </button>
+        </div>
+        {% endif %}
+    </aside>
+
+    {# ── COLONNE CENTRALE : CHAT ───────────────────────────────────────────── #}
+    <main class="synapse-chat-main">
+        
+        {# Header Mobile (Visible uniquement sur petits écrans) #}
+        <header class="synapse-chat-main__header">
+            <button class="synapse-chat-btn synapse-chat-btn--icon synapse-chat-sidebar-toggle" data-action="click->{{ controller_override }}#toggleSidebar" aria-label="Ouvrir le menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+            <span class="synapse-chat-main__title">Synapse AI</span>
+            <div class="synapse-chat-main__header-spacer"></div>
+        </header>
+
+        <div class="synapse-chat-messages" data-{{ controller_override }}-target="messages">
+            
+            {# État d'accueil (Nouvelle discussion) #}
+            <div class="synapse-chat-greeting {{ history is not empty ? 'synapse-hidden' : '' }}" data-{{ controller_override }}-target="greeting">
+                {% block synapse_greeting_content %}
+                    <div class="synapse-chat-greeting__avatar">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                    </div>
+                    <h1 class="synapse-chat-greeting__title">Bonjour</h1>
+                    <p class="synapse-chat-greeting__subtitle">Comment puis-je vous aider aujourd'hui ?</p>
                 {% endblock %}
             </div>
 
-            {# 2b. History Loop #}
+            {# Boucle de l'historique #}
             {% for msg in history %}
-                {% set is_ai = msg.role == 'assistant' or msg.role == 'model' or msg.role == 'MODEL' %}
-                <div class="synapse-chat__message synapse-chat__message--{{ is_ai ? 'assistant' : 'user' }}">
-                    {% if is_ai %}
-                        <div class="synapse-chat__avatar">
-                            <div class="avatar-ai">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 32 32"><use href="#gemini-icon" fill="url(#gemini-gradient)"></use></svg>
-                            </div>
-                        </div>
-                    {% endif %}
-                    <div class="synapse-chat__content">
-                        <div class="synapse-chat__bubble">
-                            {# Supporte à la fois les entités (via getDecryptedContent) et les tableaux (via clé 'decryptedContent' ou 'content') #}
-                            {% set displayContent = msg.decryptedContent is defined ? msg.decryptedContent : (msg.content is defined ? msg.content : '') %}
-                            {{ displayContent|synapse_markdown }}
+                {% set metadata = msg.metadata|default({}) %}
+                {% if metadata.subtype|default('') == 'system_action' %}
+                    <div class="synapse-chat-message synapse-chat-message--system-action">
+                        <div class="synapse-chat-message__system-content">
+                            {{ msg.decryptedContent|default(msg.content)|synapse_markdown }}
                         </div>
                     </div>
-                </div>
+                {% else %}
+                    {% set is_ai = msg.role == 'assistant' or msg.role == 'model' or msg.role == 'MODEL' %}
+                    <div class="synapse-chat-message synapse-chat-message--{{ is_ai ? 'assistant' : 'user' }}">
+                        {% if is_ai %}
+                            <div class="synapse-chat-avatar synapse-chat-avatar--ai">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                            </div>
+                        {% endif %}
+                        
+                        <div class="synapse-chat-message__content">
+                            <div class="synapse-chat-bubble">
+                                {% set displayContent = msg.decryptedContent is defined ? msg.decryptedContent : (msg.content is defined ? msg.content : '') %}
+                                {{ displayContent|synapse_markdown }}
+                            </div>
+                            {% if is_ai and debug_mode|default(false) and synapse_can_debug() and msg.metadata.debug_id is defined %}
+                                <button type="button" class="synapse-chat-debug-btn" data-action="click->{{ controller_override }}#showDebug" data-debug-id="{{ msg.metadata.debug_id }}" title="Voir le debug">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bug"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg>
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
             {% endfor %}
         </div>
 
-        {# 3. Input Area #}
-        <div class="synapse-chat__input-area">
-            <form data-action="submit->{{ controller_override|default('synapse-chat') }}#send" id="chat-form">
-                <div class="synapse-chat__input-wrapper">
-                    <!-- Textarea -->
+        {# Zone de saisie (fixée en bas de la zone centrale) #}
+        <div class="synapse-chat-input-area">
+            <form class="synapse-chat-form" data-action="submit->{{ controller_override }}#send" id="chat-form">
+                <div class="synapse-chat-input-wrapper">
                     <textarea 
-                        data-{{ controller_override|default('synapse-chat') }}-target="input" 
-                        placeholder="Saisissez un prompt..." 
-                        rows="1"></textarea>
+                        class="synapse-chat-textarea"
+                        data-{{ controller_override }}-target="input" 
+                        placeholder="Posez votre question ou saisissez un prompt..." 
+                        rows="1"
+                        aria-label="Message explicatif"></textarea>
 
-                    <!-- Toolbar -->
-                    <div class="input-toolbar">
-                        <div class="input-toolbar-left">
-                            {# Reset Button - Hidden by default, use sidebar "Nouvelle conversation" instead #}
-                            {% if allow_new_chat|default(false) %}
-                                <button type="button" class="action-round-btn" data-action="click->{{ controller_override|default('synapse-chat') }}#newConversation" title="Nouvelle discussion">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M13 8H7"></path><path d="M17 12H7"></path></svg>
-                                </button>
-                            {% endif %}
-
-                            {# Tone Selector (if available) #}
+                    <div class="synapse-chat-toolbar">
+                        <div class="synapse-chat-toolbar__left">
                             {% set tones = synapse_get_tones() %}
                             {% if tones is not empty %}
-                                <select class="tone-input-selector" data-{{ controller_override|default('synapse-chat') }}-target="toneSelect">
-                                    <option value="">L'assistant (par défaut)</option>
-                                    {% for t in tones %}
-                                        <option value="{{ t.key }}">{{ t.emoji }} {{ t.name }}</option>
-                                    {% endfor %}
-                                </select>
+                                <div class="synapse-chat-tone-picker" data-{{ controller_override }}-target="tonePicker">
+                                    <button type="button" class="synapse-chat-tone-trigger" data-action="click->{{ controller_override }}#toggleToneMenu" data-{{ controller_override }}-target="toneTrigger" aria-label="Choisir une personnalité">
+                                        <span class="synapse-chat-tone-trigger__emoji" data-{{ controller_override }}-target="currentToneEmoji">✨</span>
+                                        <span class="synapse-chat-tone-trigger__name" data-{{ controller_override }}-target="currentToneName">Personnalité</span>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                    </button>
+                                    
+                                    <div class="synapse-chat-tone-menu synapse-hidden" data-{{ controller_override }}-target="toneMenu">
+                                        <div class="synapse-chat-tone-menu__notice">
+                                            Le ton modifie uniquement le style de la réponse, pas la capacité de réflexion de l'IA.
+                                        </div>
+                                        <div class="synapse-chat-tone-option active" data-action="click->{{ controller_override }}#selectTone" data-tone-key="" data-tone-name="Personnalité" data-tone-emoji="✨">
+                                            <span class="synapse-chat-tone-option__emoji">✨</span>
+                                            <div class="synapse-chat-tone-option__info">
+                                                <div class="synapse-chat-tone-option__name">Normal (Par défaut)</div>
+                                            </div>
+                                        </div>
+                                        {% for t in tones %}
+                                            <div class="synapse-chat-tone-option" data-action="click->{{ controller_override }}#selectTone" data-tone-key="{{ t.key }}" data-tone-name="{{ t.name }}" data-tone-emoji="{{ t.emoji }}">
+                                                <span class="synapse-chat-tone-option__emoji">{{ t.emoji }}</span>
+                                                <div class="synapse-chat-tone-option__info">
+                                                    <div class="synapse-chat-tone-option__name">{{ t.name }}</div>
+                                                    <div class="synapse-chat-tone-option__desc">{{ t.description }}</div>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                    <input type="hidden" name="tone" value="" data-{{ controller_override }}-target="toneInput">
+                                </div>
                             {% endif %}
                         </div>
 
-                        <div class="input-toolbar-right">
-                            <button type="submit" class="btn-send-main" data-{{ controller_override|default('synapse-chat') }}-target="submitBtn">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        <div class="synapse-chat-toolbar__right">
+                            <button type="submit" class="synapse-chat-btn-send" data-{{ controller_override }}-target="submitBtn" aria-label="Envoyer">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                             </button>
                         </div>
                     </div>
                 </div>
                 
-                <div id="input-footer" class="input-footer-text {{ history is empty ? 'hidden' : '' }}">
-                   L'IA peut commettre des erreurs.
+                <div class="synapse-chat-disclaimer">
+                    L'IA peut générer des informations incorrectes. Vérifiez les faits importants.
                 </div>
             </form>
         </div>
-    </div>
+    </main>
+    
+    {# ── COLONNE DROITE : PLACEHOLDER ──────────────────────────────────────── #}
+    <aside class="synapse-chat-aside" data-{{ controller_override }}-target="aside">
+        {# Utilisable pour l'historique de recherche, réglages additionnels, ou contexte #}
+    </aside>
+
 </div>

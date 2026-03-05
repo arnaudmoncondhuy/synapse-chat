@@ -23,6 +23,7 @@ class ChatUiController extends AbstractController
 {
     public function __construct(
         private PermissionCheckerInterface $permissionChecker,
+        private \ArnaudMoncondhuy\SynapseCore\Contract\ConfigProviderInterface $configProvider,
         private ?ConversationManager $conversationManager = null,
     ) {}
 
@@ -31,6 +32,7 @@ class ChatUiController extends AbstractController
         if (!$this->permissionChecker->canCreateConversation()) {
             throw $this->createAccessDeniedException('Access Denied to Chat UI.');
         }
+
         if ($profiler) {
             $profiler->disable();
         }
@@ -47,9 +49,13 @@ class ChatUiController extends AbstractController
             }
         }
 
+        $config = $this->configProvider->getConfig();
+        $debugMode = $config['debug_mode'] ?? false;
+
         return $this->render('@Synapse/chat/page.html.twig', [
             'history' => $history,
             'currentConversationId' => $currentConversationId,
+            'debug_mode' => $debugMode,
         ]);
     }
 }

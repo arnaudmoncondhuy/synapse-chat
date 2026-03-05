@@ -1,52 +1,66 @@
 import { Controller } from '@hotwired/stimulus';
 
 /**
- * Synapse Chat Controller (v2 - Refactored)
+ * Synapse Chat Controller V2 (Minimalist Organic)
  *
- * Handles the chat UI: sending messages, receiving streaming responses,
- * rendering markdown, and displaying thinking/debug blocks.
- *
- * Agnostic: No hardcoded texts (uses data-defaults or attributes).
+ * Gère l'UI du chat (streaming NDJSON) ET la liste des conversations (historique).
+ * Remplace l'ancienne séparation `synapse_chat_controller` / `synapse_sidebar_controller`.
  */
 export default class extends Controller {
-    static targets = ['messages', 'input', 'submitBtn', 'toneSelect', 'container', 'greeting'];
+    static targets = [
+        // Zone Chat Principal
+        'messages', 'input', 'submitBtn', 'greeting',
+        'tonePicker', 'toneTrigger', 'toneMenu', 'currentToneEmoji', 'currentToneName', 'toneInput',
+        // Zone Sidebar
+        'sidebar', 'sidebarOverlay', 'conversationsList', 'conversationsEmpty',
+        // Onglets et mémoire
+        'tabConversations', 'tabMemory', 'panelConversations', 'panelMemory',
+        'memoryInput', 'memoryList', 'memoryEmpty'
+    ];
+
     static values = {
-        history: Array,
-        debug: { type: Boolean, default: false },
-        welcomeMessage: { type: String, default: '' }, // Allow overriding "New Conversation" toast
         chatUrl: String,
         resetUrl: String,
         csrfUrl: String,
         memoryConfirmUrl: String,
         memoryRejectUrl: String,
-        debugUrlTemplate: String
+        memoryListUrl: String,
+        memoryDeleteUrlTemplate: String,
+        memoryManualUrl: String,
+        memoryUpdateUrlTemplate: String,
+        conversationsUrl: String,
+        debugUrlTemplate: String,
+        currentConversationId: String,
+        debug: { type: Boolean, default: false }
     };
 
     connect() {
         this.scrollToBottom();
-        this.historyLoaded = false;
         this.inputTarget.focus();
 
-        // Bind methods for manual event listeners
+        // Écouteurs pour le textarea (auto-resize et Entrée = submit)
         this.onKeydown = this.handleKeydown.bind(this);
         this.onInput = this.autoResize.bind(this);
-
-        // Manual event listeners to avoid Stimulus debug logs on every keystroke
         if (this.hasInputTarget) {
             this.inputTarget.addEventListener('keydown', this.onKeydown);
             this.inputTarget.addEventListener('input', this.onInput);
         }
 
-        // Check for debug mode in URL
+        // Écouteur pour fermer le menu des tons si on clique ailleurs
+        this.onClickOutside = this.closeToneMenuOutside.bind(this);
+        document.addEventListener('click', this.onClickOutside);
+
         const urlParams = new URLSearchParams(window.location.search);
         this.isDebugMode = urlParams.has('debug') || this.debugValue;
 
-        if (this.isDebugMode) {
-            this.element.classList.add('synapse-chat--debug-mode');
-        }
-
-        // Load marked async (for streaming)
+        // Charger Markdown (Asynchrone)
         this.loadMarked();
+
+        // Charger la liste des conversations (Sidebar)
+        this.loadConversations();
+
+        // Charger le ton persistant
+        this.loadPersistentTone();
     }
 
     disconnect() {
@@ -54,41 +68,208 @@ export default class extends Controller {
             this.inputTarget.removeEventListener('keydown', this.onKeydown);
             this.inputTarget.removeEventListener('input', this.onInput);
         }
+        document.removeEventListener('click', this.onClickOutside);
     }
 
-    /**
-     * Token CSRF : d'abord DOM (meta ou data-csrf-token), sinon cache après fetch.
-     */
-    getCsrfToken() {
-        const fromMeta = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-        if (fromMeta) return fromMeta;
-        const fromData = this.element?.dataset?.csrfToken ?? '';
-        if (fromData) return fromData;
-        return this._csrfToken ?? '';
-    }
+    /* ── 1. GESTION DE LA SIDEBAR (MOBILE & LAYOUTS CONTRAINTS) ────── */
 
-    /**
-     * Garantit d'avoir un token CSRF : lit le DOM, sinon fetch GET /synapse/api/csrf-token.
-     * À appeler avant toute requête POST vers l'API.
-     */
-    async ensureCsrfToken() {
-        if (this.getCsrfToken()) return this.getCsrfToken();
-        try {
-            const r = await fetch(this.csrfUrlValue || '/synapse/api/csrf-token', { credentials: 'same-origin' });
-            if (!r.ok) return '';
-            const data = await r.json();
-            const token = data?.token ?? '';
-            if (token) this._csrfToken = token;
-            return token;
-        } catch {
-            return '';
+    toggleSidebar() {
+        if (!this.hasSidebarTarget) return;
+        this.sidebarTarget.classList.toggle('is-open');
+        if (this.hasSidebarOverlayTarget) {
+            this.sidebarOverlayTarget.classList.toggle('is-visible');
         }
     }
 
-    // History is now rendered server-side via Twig
-    loadHistory(history) {
-        this.scrollToBottom();
+    closeSidebar() {
+        if (!this.hasSidebarTarget) return;
+        this.sidebarTarget.classList.remove('is-open');
+        if (this.hasSidebarOverlayTarget) {
+            this.sidebarOverlayTarget.classList.remove('is-visible');
+        }
     }
+
+    /* ── 1.5. ONGLET CONVERSATIONS / MÉMOIRE ───────────────────────── */
+
+    showConversationsTab() {
+        if (this.hasTabConversationsTarget) this.tabConversationsTarget.classList.add('active');
+        if (this.hasTabMemoryTarget) this.tabMemoryTarget.classList.remove('active');
+
+        if (this.hasPanelConversationsTarget) this.panelConversationsTarget.classList.remove('synapse-hidden', 'active'); // trick to force reflow if needed
+        if (this.hasPanelConversationsTarget) this.panelConversationsTarget.classList.add('active');
+
+        if (this.hasPanelMemoryTarget) {
+            this.panelMemoryTarget.classList.remove('active');
+            this.panelMemoryTarget.classList.add('synapse-hidden');
+        }
+    }
+
+    showMemoryTab() {
+        if (this.hasTabConversationsTarget) this.tabConversationsTarget.classList.remove('active');
+        if (this.hasTabMemoryTarget) this.tabMemoryTarget.classList.add('active');
+
+        if (this.hasPanelConversationsTarget) {
+            this.panelConversationsTarget.classList.remove('active');
+            this.panelConversationsTarget.classList.add('synapse-hidden');
+        }
+
+        if (this.hasPanelMemoryTarget) this.panelMemoryTarget.classList.remove('synapse-hidden', 'active');
+        if (this.hasPanelMemoryTarget) this.panelMemoryTarget.classList.add('active');
+
+        this.loadMemories();
+    }
+
+    /* ── 2. CHARGEMENT DES CONVERSATIONS (Anciennement sidebar_controller) ── */
+
+    async loadConversations() {
+        try {
+            const url = this.conversationsUrlValue || '/synapse/api/conversations';
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                if (response.status === 401) this.renderConversations([]); // Utilisateur non loggé
+                else throw new Error('Erreur de chargement des conversations');
+                return;
+            }
+
+            const conversations = await response.json();
+            this.renderConversations(conversations);
+        } catch (error) {
+            console.error('[Synapse] Impossible de charger l\'historique', error);
+            if (this.hasConversationsListTarget) {
+                this.conversationsListTarget.innerHTML = `<div class="p-3 text-sm text-red-500">Erreur de chargement de l'historique.</div>`;
+            }
+        }
+    }
+
+    renderConversations(conversations) {
+        console.log('[Synapse] renderConversations', conversations.length, 'targets:', {
+            list: this.hasConversationsListTarget,
+            empty: this.hasConversationsEmptyTarget
+        });
+
+        if (conversations.length === 0) {
+            if (this.hasConversationsEmptyTarget) this.conversationsEmptyTarget.classList.remove('synapse-hidden');
+            if (this.hasConversationsListTarget) this.conversationsListTarget.innerHTML = '';
+            return;
+        }
+
+        if (this.hasConversationsEmptyTarget) this.conversationsEmptyTarget.classList.add('synapse-hidden');
+
+        const html = conversations.map(conv => {
+            const isActive = String(conv.id) === String(this.currentConversationIdValue);
+            return `
+                <div class="synapse-chat-conv-item ${isActive ? 'is-active' : ''}" 
+                     data-conversation-id="${conv.id}"
+                     data-action="click->${this.identifier}#selectConversation">
+                    <div class="synapse-chat-conv-item__title" data-title-target="true">${this.escapeHtml(conv.title || 'Nouvelle conversation')}</div>
+                    <div class="synapse-chat-conv-item__meta">
+                        <span>${this.formatDate(conv.updated_at)}</span>
+                    </div>
+                    
+                    <div class="synapse-chat-conv-actions">
+                        <button type="button" class="synapse-btn-small" data-action="click->${this.identifier}#startRename:stop" aria-label="Renommer">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                        </button>
+                        <button type="button" class="synapse-btn-small is-danger" data-action="click->${this.identifier}#deleteConversation:stop" aria-label="Supprimer">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        if (this.hasConversationsListTarget) {
+            this.conversationsListTarget.innerHTML = html;
+        }
+    }
+
+    selectConversation(event) {
+        const conversationId = event.currentTarget.dataset.conversationId;
+        // On redirige carrément pour recharger l'historique côté serveur (SSR Twig)
+        const url = new URL(window.location.href);
+        url.searchParams.set('conversation', conversationId);
+        window.location.href = url.toString();
+    }
+
+    async deleteConversation(event) {
+        const item = event.currentTarget.closest('.synapse-chat-conv-item');
+        const conversationId = item.dataset.conversationId;
+
+        if (!confirm('Supprimer cette conversation ?')) return;
+
+        // UI optimiste
+        item.style.opacity = '0.5';
+        item.style.pointerEvents = 'none';
+
+        try {
+            const url = `${this.conversationsUrlValue || '/synapse/api/conversations'}/${conversationId}`;
+            const response = await fetch(url, { method: 'DELETE', headers: { 'Content-Type': 'application/json' } });
+
+            if (!response.ok) throw new Error('Échec suppression');
+
+            item.remove();
+
+            // Si c'était la discussion active, on retourne à l'accueil
+            if (String(conversationId) === String(this.currentConversationIdValue)) {
+                this.newConversation({ preventDefault: () => { } }); // Simule click nouveau chat
+            }
+        } catch (error) {
+            console.error('Erreur suppression:', error);
+            item.style.opacity = '1';
+            item.style.pointerEvents = 'auto';
+            alert('Impossible de supprimer la conversation.');
+        }
+    }
+
+    startRename(event) {
+        const item = event.currentTarget.closest('.synapse-chat-conv-item');
+        const titleDiv = item.querySelector('[data-title-target="true"]');
+        const currentTitle = titleDiv.textContent;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentTitle;
+        input.className = 'synapse-chat-conv-input';
+
+        titleDiv.replaceWith(input);
+        input.focus();
+        input.select();
+
+        const save = async () => {
+            const newTitle = input.value.trim();
+            const div = document.createElement('div');
+            div.className = 'synapse-chat-conv-item__title';
+            div.dataset.titleTarget = 'true';
+
+            if (newTitle && newTitle !== currentTitle) {
+                div.textContent = newTitle;
+                input.replaceWith(div);
+                try {
+                    const url = `${this.conversationsUrlValue || '/synapse/api/conversations'}/${item.dataset.conversationId}/rename`;
+                    await fetch(url, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: newTitle })
+                    });
+                } catch (err) {
+                    console.error('Erreur renommage', err);
+                    div.textContent = currentTitle; // Rollback
+                }
+            } else {
+                div.textContent = currentTitle;
+                input.replaceWith(div);
+            }
+        };
+
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+            else if (e.key === 'Escape') { input.value = currentTitle; input.blur(); }
+        });
+    }
+
+    /* ── 3. CHAT CENTRAL (STREAMING & AFFICHAGE) ────────────────────────── */
 
     handleKeydown(event) {
         if (event.key === 'Enter' && !event.shiftKey) {
@@ -97,67 +278,63 @@ export default class extends Controller {
         }
     }
 
+    autoResize(event) {
+        const textarea = event ? event.target : this.inputTarget;
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+    }
+
+    async newConversation(event) {
+        if (event) event.preventDefault();
+
+        // Supprimer le paramètre 'conversation' de l'url et rediriger
+        const url = new URL(window.location.href);
+        url.searchParams.delete('conversation');
+        window.location.href = url.toString();
+    }
+
     async send(event) {
-        event.preventDefault();
+        if (event) event.preventDefault();
 
         const message = this.inputTarget.value.trim();
         if (!message) return;
 
-        // Switch UI to chat mode immediately
-        if (this.hasContainerTarget) {
-            this.containerTarget.classList.remove('mode-welcome');
-            this.containerTarget.classList.add('mode-chat');
-        }
-        if (this.hasGreetingTarget) {
-            this.greetingTarget.classList.add('hidden');
-        }
+        // Passage du mode Accueil (Welcome) au mode Chat Actif
+        this.element.classList.remove('synapse-chat-mode-welcome');
+        this.element.classList.add('synapse-chat-mode-active');
+        if (this.hasGreetingTarget) this.greetingTarget.classList.add('synapse-hidden');
 
+        // Ajouter message utilisateur
         this.addMessage(message, 'user');
+
+        // Reset l'input
         this.inputTarget.value = '';
         this.inputTarget.style.height = 'auto';
         this.setLoading(true);
+        this.pendingMemoryProposal = null;
 
-        // Get Tone
-        let tone = null;
-        if (this.hasToneSelectTarget) {
-            tone = this.toneSelectTarget.value;
-        }
-
-        // Get current conversation ID from URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const conversationId = urlParams.get('conversation');
-
+        const tone = this.hasToneInputTarget ? this.toneInputTarget.value : null;
         const csrfToken = await this.ensureCsrfToken();
         const headers = { 'Content-Type': 'application/json' };
         if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
 
         try {
+            const payload = {
+                message: message,
+                conversation_id: this.currentConversationIdValue,
+                options: { tone: tone },
+                debug: this.isDebugMode
+            };
+
             const response = await fetch(this.chatUrlValue || '/synapse/api/chat', {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({
-                    message: message,
-                    conversation_id: conversationId,
-                    options: { tone: tone },
-                    debug: this.isDebugMode
-                })
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
-                const status = response.status;
-                let msg = `Erreur serveur (${status}). Réessayez.`;
-                if (status === 401 || status === 403) {
-                    msg = 'Session expirée ou accès refusé. Rechargez la page et réessayez.';
-                } else if (status === 405) {
-                    msg = 'Requête incorrecte (méthode non autorisée). Rechargez la page.';
-                } else {
-                    try {
-                        const body = await response.text();
-                        const parsed = body.length < 2000 && body.startsWith('{') ? JSON.parse(body) : null;
-                        if (parsed?.error || parsed?.message) msg += ' ' + (parsed.error || parsed.message);
-                        else if (body.includes('Exception') && body.length < 500) msg += ' ' + body.substring(0, 200);
-                    } catch (_) { /* ignore */ }
-                }
+                let msg = `Erreur serveur (${response.status}).`;
+                if (response.status === 401) msg = 'Session expirée. Rechargez la page.';
                 throw new Error(msg);
             }
 
@@ -166,182 +343,109 @@ export default class extends Controller {
             let buffer = '';
             let currentResponseText = '';
             let currentMessageBubble = null;
-            let receivedResultOrError = false;
             let streamErrorMessage = null;
+            let receivedResult = false;
 
-            // Safety timeout (30 seconds)
-            const streamTimeout = setTimeout(() => {
-                reader.cancel();
-                this.setLoading(false);
-                this.addMessage('⏱️ Timeout: Le serveur ne répond plus. Veuillez réessayer.', 'assistant');
-                console.error('🔴 [Stream] Timeout after 30 seconds');
-            }, 30000);
+            // Timeout sécurité adaptatif
+            let timeoutId = null;
+            const resetTimeout = () => {
+                if (timeoutId) clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => {
+                    if (!receivedResult) {
+                        reader.cancel();
+                        this.setLoading(false);
+                        this.addMessage('⏱️ Le serveur ne répond plus (Timeout).', 'assistant');
+                    }
+                }, 15000); // 15s de silence avant timeout
+            };
+
+            resetTimeout();
 
             try {
-
                 streamLoop: while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
+                    resetTimeout(); // On a reçu de la donnée, on repousse le timeout
+
                     buffer += decoder.decode(value, { stream: true });
                     const lines = buffer.split('\n');
-                    buffer = lines.pop();
+                    buffer = lines.pop(); // Garder ligne incomplète
 
                     for (const line of lines) {
-                        if (!line.trim()) continue;
-
                         const trimmedLine = line.trim();
-                        // Ne parser que les lignes NDJSON attendues (objet avec type/payload). Ignorer le CSS/HTML injecté (ex. [data-filters] { ... })
-                        if (!trimmedLine.startsWith('{')) {
-                            continue;
-                        }
+                        if (!trimmedLine.startsWith('{')) continue; // Ignorer le non-JSON
 
                         try {
                             const evt = JSON.parse(trimmedLine);
+                            if (!evt || typeof evt !== 'object' || !evt.type) continue;
 
-                            // Validate event structure
-                            if (!evt || typeof evt !== 'object' || !evt.type) {
-                                console.warn('⚠️ [Stream] Invalid event structure:', evt);
-                                continue;
-                            }
-
-                            if (evt.type === 'status') {
-                                if (evt.payload && evt.payload.message) {
-                                    this.updateLoadingStatus(evt.payload.message);
-                                }
-                            } else if (evt.type === 'delta') {
-                                // First token received: stop loading animation
+                            if (evt.type === 'delta') {
                                 if (!currentMessageBubble) {
                                     this.setLoading(false);
-                                    // Create the message bubble container manually to hold the stream
-                                    this.addMessage('', 'assistant');
-                                    const messages = this.messagesTarget.querySelectorAll('.synapse-chat__message--assistant');
-                                    const lastMsg = messages[messages.length - 1];
-                                    currentMessageBubble = lastMsg.querySelector('.synapse-chat__bubble');
+                                    this.addMessage('', 'assistant'); // Crée le conteneur vide
+                                    const messages = this.messagesTarget.querySelectorAll('.synapse-chat-message--assistant');
+                                    currentMessageBubble = messages[messages.length - 1].querySelector('.synapse-chat-bubble');
                                 }
-
                                 if (evt.payload && evt.payload.text) {
                                     currentResponseText += evt.payload.text;
                                     currentMessageBubble.innerHTML = this.parseMarkdown(currentResponseText);
                                     this.scrollToBottom();
                                 }
-
-                            } else if (evt.type === 'tool_executed') {
-                                // Événement immédiat quand un outil est exécuté
-                                if (evt.payload?.tool === 'propose_to_remember' && evt.payload?.proposal) {
-                                    this.showMemoryProposal(evt.payload.proposal, evt.payload.conversation_id ?? null, true);
-                                }
-
                             } else if (evt.type === 'result') {
-                                receivedResultOrError = true;
+                                receivedResult = true;
+                                if (timeoutId) clearTimeout(timeoutId);
                                 this.setLoading(false);
 
                                 if (evt.payload?.conversation_id) {
-                                    this.updateUrlWithConversationId(evt.payload.conversation_id);
+                                    this.updateUrlConversation(evt.payload.conversation_id);
                                 }
 
-                                // If we streamed text, ensure final consistency (sometimes helpful for incomplete markdown)
-                                if (currentMessageBubble && evt.payload && evt.payload.answer) {
+                                if (currentMessageBubble && evt.payload?.answer) {
                                     currentMessageBubble.innerHTML = this.parseMarkdown(evt.payload.answer);
-                                    // Add debug footer if needed
-                                    if (evt.payload.conversation_id) {
-                                        this.updateUrlWithConversationId(evt.payload.conversation_id);
+                                    if (this.debugValue && evt.payload?.debug_id) {
+                                        this.addDebugButtonToMessage(currentMessageBubble.closest('.synapse-chat-message'), evt.payload.debug_id);
                                     }
-
-                                    // Re-inject debug button if in debug mode
-                                    if (this.isDebugMode && evt.payload.debug_id) {
-                                        const debugUrl = this.debugUrlTemplateValue 
-                                            ? this.debugUrlTemplateValue.replace('DEBUG_ID', evt.payload.debug_id)
-                                            : `/synapse/_debug/${evt.payload.debug_id}`;
-                                        const debugHtml = `
-                                        <button type="button" class="synapse-chat__debug-trigger"
-                                                onclick="window.open('${debugUrl}', '_blank')"
-                                                title="Debug">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                                        </button>
-                                    `;
-                                        // wrapper footer
-                                        const footer = document.createElement('div');
-                                        footer.className = 'synapse-chat__footer';
-                                        footer.innerHTML = debugHtml;
-
-                                        // Find parent .synapse-chat__content and append footer
-                                        currentMessageBubble.closest('.synapse-chat__content').appendChild(footer);
-                                    }
-                                } else if (evt.payload && evt.payload.answer) {
-                                    // Fallback if no delta was received (e.g. empty response or error handled as result)
-                                    this.addMessage(evt.payload.answer, 'assistant', evt.payload);
+                                } else if (evt.payload?.answer && !currentResponseText) {
+                                    this.addMessage(evt.payload.answer, 'assistant', { debug_id: evt.payload.debug_id });
                                 }
 
+                            } else if (evt.type === 'status' && evt.payload?.message) {
+                                // Update loading text if needed
                             } else if (evt.type === 'title') {
-                                // Auto-generated title received
-                                const conversationId = new URLSearchParams(window.location.search).get('conversation');
-                                if (conversationId && evt.payload && evt.payload.title) {
-                                    document.dispatchEvent(new CustomEvent('assistant:title-updated', {
-                                        detail: { conversationId, title: evt.payload.title }
-                                    }));
+                                // Titre auto-généré reçu
+                                if (evt.payload?.title) {
+                                    this.updateSidebarConversationTitle(this.currentConversationIdValue, evt.payload.title);
                                 }
                             } else if (evt.type === 'error') {
-                                receivedResultOrError = true;
-                                const payload = evt.payload;
-                                streamErrorMessage = typeof payload === 'string' ? payload : (payload?.message || evt.message || (payload && JSON.stringify(payload)) || 'Erreur inconnue');
+                                streamErrorMessage = typeof evt.payload === 'string' ? evt.payload : (evt.payload?.message || "Erreur interne.");
+                                receivedResult = true;
+                                if (timeoutId) clearTimeout(timeoutId);
                                 break streamLoop;
                             } else if (evt.type === 'tool_executed') {
                                 if (evt.payload?.tool === 'propose_to_remember' && evt.payload?.proposal) {
-                                    this.showMemoryProposal(evt.payload.proposal, evt.payload.conversation_id ?? null, true);
+                                    this.pendingMemoryProposal = {
+                                        proposal: evt.payload.proposal,
+                                        conversationId: evt.payload.conversation_id || this.currentConversationIdValue
+                                    };
                                 }
-                            } else {
-                                console.warn('⚠️ [Stream] Unknown event type:', evt.type);
                             }
-                        } catch (e) {
-                            if (e instanceof SyntaxError) {
-                                // Lignes non-JSON (injection toolbar/CSS, etc.) : ignorer sans polluer la console
-                                const preview = trimmedLine.substring(0, 80);
-                                const looksLikeInjection = /^\s*[.#\w\[\]-]+\s*\{|<\w|position:\s|cursor:\s|display:\s|content:\s|^\s*\[[\w-]+\]\s*\{/i.test(preview);
-                                if (!looksLikeInjection) {
-                                    console.warn('⚠️ [Stream] Invalid JSON:', trimmedLine.substring(0, 100));
-                                }
-                            } else {
-                                console.error('🔴 [Stream] Processing error:', e);
-                                // Don't throw - continue processing other events
-                            }
-                        }
+                        } catch (e) { /* Ligne partielle, on ignore silencieusement */ }
                     }
-                }
-
-                // Dernière ligne éventuelle (sans \n final) — même logique que le flux principal pour result
-                if (buffer.trim() && buffer.trim().startsWith('{')) {
-                    try {
-                        const evt = JSON.parse(buffer.trim());
-                        if (evt?.type === 'error') {
-                            receivedResultOrError = true;
-                            const payload = evt.payload;
-                            streamErrorMessage = typeof payload === 'string' ? payload : (payload?.message || JSON.stringify(payload) || 'Erreur inconnue');
-                        }
-                        if (evt?.type === 'result') {
-                            receivedResultOrError = true;
-                            this.setLoading(false);
-                            const payload = evt.payload ?? {};
-                            if (payload.conversation_id) this.updateUrlWithConversationId(payload.conversation_id);
-                            if (payload.answer) {
-                                if (currentMessageBubble) {
-                                    currentMessageBubble.innerHTML = this.parseMarkdown(payload.answer);
-                                } else {
-                                    this.addMessage(payload.answer, 'assistant', payload);
-                                }
-                            }
-                        }
-                    } catch (_) { /* ignore parse error */ }
-                }
+                } // End Stream loop
 
                 if (streamErrorMessage) {
                     this.setLoading(false);
                     this.addMessage('❌ ' + streamErrorMessage, 'assistant');
-                    this.scrollToBottom();
-                } else if (!receivedResultOrError) {
+                } else if (!receivedResult && currentResponseText === '') {
                     this.setLoading(false);
-                    this.addMessage('Aucune réponse reçue. Vérifiez la configuration IA (modèle, clé API) et les logs serveur.', 'assistant');
-                    this.scrollToBottom();
+                    this.addMessage('⚠️ Réponse vide du serveur.', 'assistant');
+                }
+
+                // Afficher l'encart de mémorisation à la fin du message principal pour plus de cohérence
+                if (this.pendingMemoryProposal) {
+                    this.showMemoryProposal(this.pendingMemoryProposal.proposal, this.pendingMemoryProposal.conversationId);
+                    this.pendingMemoryProposal = null;
                 }
             } finally {
                 clearTimeout(streamTimeout);
@@ -349,352 +453,494 @@ export default class extends Controller {
 
         } catch (error) {
             this.setLoading(false);
-            let errMsg = error?.message ?? 'Erreur inconnue';
-            if (/network|fetch|HTTP2|protocol|Failed to fetch/i.test(errMsg)) {
-                errMsg = 'Connexion interrompue (réseau ou proxy). Réessayez sans ?debug=1 ou vérifiez le serveur.';
-            } else {
-                errMsg += ' (synapse_chat_controller.js)';
-            }
-            this.addMessage('❌ Erreur: ' + errMsg, 'assistant');
-            console.error('🔴 [Stream] Fatal error (synapse_chat_controller.js):', error);
+            this.addMessage('❌ ' + error.message, 'assistant');
+            console.error('Erreur API Chat:', error);
         } finally {
             this.setLoading(false);
             this.inputTarget.focus();
         }
     }
 
-    updateLoadingStatus(message) {
-        const loadingContent = this.messagesTarget.querySelector('#synapse-loading .synapse-chat__content');
-        if (loadingContent) {
-            loadingContent.innerHTML = `<span class="synapse-chat__typing-dots">${message}</span>`;
-            this.scrollToBottom();
-        }
-    }
+    addMessage(text, role, metadata = {}) {
+        const formattedText = this.parseMarkdown(text);
+        const debugId = metadata?.debug_id || null;
+        let html = '';
 
-    autoResize(event) {
-        const textarea = event ? event.target : this.inputTarget;
-        textarea.style.height = 'auto';
-
-        const maxHeight = 120;
-        const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-        textarea.style.height = newHeight + 'px';
-        textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
-    }
-
-    async newConversation() {
-        const csrfToken = await this.ensureCsrfToken();
-        const headers = { 'Content-Type': 'application/json' };
-        if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
-
-        try {
-            const response = await fetch(this.resetUrlValue || '/synapse/api/reset', {
-                method: 'POST',
-                headers
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                // Clear all messages
-                this.messagesTarget.querySelectorAll('.synapse-chat__message').forEach(m => m.remove());
-
-                // Restore greeting
-                if (this.hasGreetingTarget) {
-                    this.greetingTarget.classList.remove('hidden');
-                }
-
-                // Restore welcome mode
-                if (this.hasContainerTarget) {
-                    this.containerTarget.classList.remove('mode-chat');
-                    this.containerTarget.classList.add('mode-welcome');
-                }
-
-                // Optional: Toast or message if no greeting target
-                if (!this.hasGreetingTarget) {
-                    const aiIcon = `<div class="synapse-chat__avatar"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 32 32"><use href="#gemini-icon" fill="url(#gemini-gradient)"></use></svg></div>`;
-                    const msg = this.welcomeMessageValue || "Nouvelle conversation démarrée !";
-                    this.messagesTarget.innerHTML = `
-                        <div class="synapse-chat__message synapse-chat__message--assistant">
-                             ${aiIcon}
-                            <div class="synapse-chat__content">
-                                <div class="synapse-chat__bubble"><p>${msg}</p></div>
-                            </div>
-                        </div>
-                     `;
-                }
-
-                this.inputTarget.focus();
+        if (metadata?.subtype === 'system_action') {
+            html = `
+                <div class="synapse-chat-message synapse-chat-message--system-action">
+                    <div class="synapse-chat-message__system-content">
+                        ${formattedText}
+                    </div>
+                </div>
+            `;
+        } else {
+            let avatarContent = '';
+            if (role === 'assistant') {
+                avatarContent = `
+                    <div class="synapse-chat-avatar synapse-chat-avatar--ai">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                    </div>
+                `;
             } else {
-                throw new Error(data.error || 'Reset failed');
+                avatarContent = `<div class="synapse-chat-avatar synapse-chat-avatar--empty"></div>`; // Espace pour l'alignement
             }
-        } catch (error) {
-            alert('Error: ' + error.message);
-        }
-    }
 
-    addMessage(text, role, debugData = null) {
-        let formattedText = text;
+            let debugButton = '';
+            if (role === 'assistant' && this.debugValue && debugId) {
+                debugButton = `
+                    <button type="button" class="synapse-chat-debug-btn" data-action="click->${this.identifier}#showDebug" data-debug-id="${debugId}" title="Voir le debug">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bug"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg>
+                    </button>
+                `;
+            }
 
-        // Simple markdown parsing
-        formattedText = this.parseMarkdown(formattedText);
-
-        // Debug info
-        let debugHtml = '';
-        if (this.isDebugMode && debugData && debugData.debug_id) {
-            const debugUrl = this.debugUrlTemplateValue 
-                ? this.debugUrlTemplateValue.replace('DEBUG_ID', debugData.debug_id)
-                : `/synapse/_debug/${debugData.debug_id}`;
-            debugHtml = `
-                <button type="button" class="synapse-chat__debug-trigger"
-                        onclick="window.open('${debugUrl}', '_blank')"
-                        title="Debug">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-                </button>
+            html = `
+                <div class="synapse-chat-message synapse-chat-message--${role}">
+                    ${avatarContent}
+                    <div class="synapse-chat-message__content">
+                        <div class="synapse-chat-bubble">${formattedText}</div>
+                        ${debugButton}
+                    </div>
+                </div>
             `;
         }
 
-        // Build avatar
-        // Using generic classes so CSS/Theme handles the icon (SVG Symbol expected in DOM)
-        const aiIcon = `<div class="synapse-chat__avatar"><div class="avatar-ai"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 32 32"><use href="#gemini-icon" fill="url(#gemini-gradient)"></use></svg></div></div>`;
-        const userAvatar = `<div class="synapse-chat__avatar">👤</div>`;
+        this.messagesTarget.insertAdjacentHTML('beforeend', html);
+        this.scrollToBottom();
+    }
 
-        const avatarContent = role === 'user' ? userAvatar : aiIcon;
+    setLoading(isLoading) {
+        if (this.hasSubmitBtnTarget) this.submitBtnTarget.disabled = isLoading;
 
-        let footerHtml = '';
-        if (debugHtml) {
-            footerHtml = `<div class="synapse-chat__footer">${debugHtml}</div>`;
+        if (isLoading) {
+            const html = `
+                <div class="synapse-chat-message synapse-chat-message--assistant" id="synapse-chat-loading-ind">
+                    <div class="synapse-chat-avatar synapse-chat-avatar--loading">
+                        <div class="synapse-chat-spinner"></div>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+                    </div>
+                    <div class="synapse-chat-message__content" style="justify-content: center;">
+                        <span class="synapse-chat-dots" style="color:var(--synapse-chat-text-muted);font-size:0.875rem;">Analyse</span>
+                    </div>
+                </div>
+            `;
+            this.messagesTarget.insertAdjacentHTML('beforeend', html);
+            this.scrollToBottom();
+        } else {
+            const loader = this.element.querySelector('#synapse-chat-loading-ind');
+            if (loader) loader.remove();
         }
+    }
+
+    addDebugButtonToMessage(messageElement, debugId) {
+        if (!messageElement || !debugId || !this.debugValue) return;
+
+        const contentArea = messageElement.querySelector('.synapse-chat-message__content');
+        if (!contentArea || contentArea.querySelector('.synapse-chat-debug-btn')) return;
+
+        const btnHtml = `
+            <button type="button" class="synapse-chat-debug-btn" data-action="click->${this.identifier}#showDebug" data-debug-id="${debugId}" title="Voir le debug">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bug"><path d="m8 2 1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 3.8-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17.2 17c2.1.1 3.8 1.9 3.8 4"/></svg>
+            </button>
+        `;
+        contentArea.insertAdjacentHTML('beforeend', btnHtml);
+    }
+
+    showDebug(event) {
+        const debugId = event.currentTarget.dataset.debugId;
+        if (!debugId || !this.hasDebugUrlTemplateValue) return;
+
+        const url = this.debugUrlTemplateValue.replace('DEBUG_ID', debugId);
+        window.open(url, '_blank');
+    }
+
+    /* ── 4. MÉMOIRE ET OUTILS ──────────────────────────────────────────────── */
+
+    showMemoryProposal(proposal, conversationId) {
+        const fact = proposal?.fact || proposal?.data?.fact;
+        if (!fact) return;
+
+        // Retirer ancien encart si présent
+        const existing = this.messagesTarget.querySelector('.synapse-chat-memory-encart');
+        if (existing) existing.closest('.synapse-chat-message').remove();
 
         const html = `
-            <div class="synapse-chat__message synapse-chat__message--${role}">
-                ${avatarContent}
-                <div class="synapse-chat__content">
-                    <div class="synapse-chat__bubble">${formattedText}</div>
-                    ${footerHtml}
+            <div class="synapse-chat-message synapse-chat-message--assistant">
+                <div class="synapse-chat-avatar synapse-chat-avatar--empty"></div>
+                <div class="synapse-chat-message__content">
+                    <div class="synapse-chat-memory-encart">
+                        <span class="synapse-chat-memory-encart__label">Mémoire :</span>
+                        <span class="synapse-chat-memory-encart__fact">${this.escapeHtml(fact)}</span>
+                        <button type="button" class="synapse-chat-memory-encart__btn" data-action-type="reject">Oublier</button>
+                        <button type="button" class="synapse-chat-memory-encart__btn" data-action-type="confirm-conv">Retenir (cette discussion)</button>
+                        <button type="button" class="synapse-chat-memory-encart__btn" data-action-type="confirm-user" style="color:var(--synapse-chat-primary);border-color:var(--synapse-chat-primary);">Mémoriser</button>
+                    </div>
                 </div>
             </div>
         `;
 
         this.messagesTarget.insertAdjacentHTML('beforeend', html);
         this.scrollToBottom();
-    }
 
-    async loadMarked() {
-        try {
-            const markedModule = await import('marked');
+        // Ajout des listeners sur le nouvel encart
+        const lastMsg = this.messagesTarget.lastElementChild;
+        const encart = lastMsg.querySelector('.synapse-chat-memory-encart');
 
-            if (typeof markedModule.parse === 'function') {
-                this.markedParse = markedModule.parse;
-            } else if (markedModule.default && typeof markedModule.default.parse === 'function') {
-                this.markedParse = markedModule.default.parse;
-            } else if (markedModule.marked && typeof markedModule.marked.parse === 'function') {
-                this.markedParse = markedModule.marked.parse;
-            } else {
-                console.warn('⚠️ [Synapse] marked module loaded but parse function not found in exports:', markedModule);
-            }
-
-        } catch (e) {
-            console.error('🔴 [Synapse] Failed to load marked:', e);
-            console.warn('Synapse: "marked" library not found. Install it for better Markdown rendering (php bin/console importmap:require marked). Using fallback parser.');
-        }
-    }
-
-    parseMarkdown(text) {
-        if (this.markedParse) {
+        encart.querySelector('[data-action-type="reject"]').addEventListener('click', async () => {
+            lastMsg.remove();
             try {
-                return this.markedParse(text);
-            } catch (e) {
-                // Fallback to regex if marked fails
+                const response = await fetch(this.memoryRejectUrlValue || '/synapse/api/memory/reject', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await this.ensureCsrfToken() },
+                    body: JSON.stringify({ fact: fact, conversation_id: conversationId })
+                });
+                const data = await response.json();
+                if (data.feedback_message) {
+                    this.addMessage(data.feedback_message, 'user', { subtype: 'system_action' });
+                }
+            } catch (e) { }
+        });
+
+        const confirmFunc = async (scope) => {
+            try {
+                const response = await fetch(this.memoryConfirmUrlValue || '/synapse/api/memory/confirm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await this.ensureCsrfToken() },
+                    body: JSON.stringify({ fact: fact, category: proposal.category || 'other', scope, conversation_id: conversationId })
+                });
+                const data = await response.json();
+                encart.classList.add('synapse-chat-memory-encart--success');
+                encart.innerHTML = `✅ Sauvegardé dans la mémoire (${scope === 'user' ? 'Générale' : 'Discussion courante'}).`;
+                setTimeout(() => { lastMsg.remove(); }, 3000);
+
+                if (data.feedback_message) {
+                    this.addMessage(data.feedback_message, 'user', { subtype: 'system_action' });
+                }
+            } catch (e) { console.error('Erreur mémoire', e); }
+        };
+
+        encart.querySelector('[data-action-type="confirm-conv"]').addEventListener('click', () => confirmFunc('conversation'));
+        encart.querySelector('[data-action-type="confirm-user"]').addEventListener('click', () => confirmFunc('user'));
+    }
+
+    /* ── 4.5. CRUD MÉMOIRE (SIDEBAR) ───────────────────────────────────────── */
+
+    async loadMemories() {
+        try {
+            const url = this.memoryListUrlValue || '/synapse/api/memory';
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                if (response.status === 401) this.renderMemories([]);
+                else throw new Error('Erreur de chargement des souvenirs');
+                return;
+            }
+
+            const data = await response.json();
+            this.renderMemories(data.memories || []);
+        } catch (error) {
+            console.error('[Synapse] Impossible de charger la mémoire', error);
+            if (this.hasMemoryListTarget) {
+                this.memoryListTarget.innerHTML = `<div class="p-3 text-sm text-red-500">Erreur réseau.</div>`;
             }
         }
-
-        // FALLBACK: Robust Regex Parser
-        let html = text;
-
-        // 1. PRIORITY: Convert Markdown links to styled buttons
-        const linksBefore = (html.match(/\[([^\]]+)\]\(([^)]+)\)/g) || []).length;
-        html = html.replace(
-            /\[([^\]]+)\]\(([^)]+)\)/g,
-            '<a href="$2" class="synapse-btn-action" target="_blank" rel="noopener noreferrer">$1</a>'
-        );
-
-        // 2. Text formatting
-        html = html
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-        // 3. Code blocks
-        html = html
-            .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>');
-
-        // 4. Line breaks (LAST to avoid breaking HTML tags)
-        html = html.replace(/\n/g, '<br>');
-
-        // 5. Group consecutive action buttons into a flex container
-        // Match 2+ consecutive buttons (with optional <br> between them)
-        html = html.replace(
-            /(<a class="synapse-btn-action"[^>]*>.*?<\/a>(?:<br>)?){2,}/g,
-            (match) => {
-                // Remove <br> tags between buttons and wrap in action group
-                const cleanedButtons = match.replace(/<br>/g, '');
-                return `<div class="synapse-action-group">${cleanedButtons}</div>`;
-            }
-        );
-
-        return html;
     }
 
-    setLoading(isLoading) {
-        this.submitBtnTarget.disabled = isLoading;
-
-        if (isLoading) {
-            const aiIcon = `<div class="synapse-chat__avatar synapse-chat__avatar--loading"><div class="synapse-chat__spinner"></div><div class="avatar-ai"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 32 32"><use href="#gemini-icon" fill="url(#gemini-gradient)"></use></svg></div></div>`;
-
-            this.messagesTarget.insertAdjacentHTML('beforeend', `
-                <div class="synapse-chat__message synapse-chat__message--assistant synapse-chat__loading" id="synapse-loading">
-                    ${aiIcon}
-                    <div class="synapse-chat__content">
-                        <span class="synapse-chat__typing-dots">Réflexion</span>
-                    </div>
-                </div>
-            `);
-            this.scrollToBottom();
-        } else {
-            const loading = this.element.querySelector('#synapse-loading');
-            if (loading) loading.remove();
-        }
-    }
-
-    scrollToBottom() {
-        this.messagesTarget.scrollTop = this.messagesTarget.scrollHeight;
-    }
-
-    /**
-     * Affiche un encart de proposition de mémorisation dans le fil du chat.
-     * 3 boutons : Non / Oui, dans la conversation / Oui, toujours. Actions directes (API), sans repasser par le LLM.
-     * @param {Object} proposal - { fact, category?, __synapse_action? }
-     * @param {string|null} conversationId
-     * @param {boolean} insertBeforeLastAssistant - si true, insère l'encart juste avant la dernière bulle assistant (plus visible)
-     */
-    showMemoryProposal(proposal, conversationId = null, insertBeforeLastAssistant = false) {
-        const fact = proposal?.fact ?? proposal?.data?.fact;
-        if (!proposal || (typeof fact !== 'string' && typeof fact !== 'number')) {
-            console.warn('[Synapse Memory] Proposition invalide (fact manquant):', proposal);
+    renderMemories(memories) {
+        if (memories.length === 0) {
+            if (this.hasMemoryEmptyTarget) this.memoryEmptyTarget.classList.remove('synapse-hidden');
+            if (this.hasMemoryListTarget) this.memoryListTarget.innerHTML = '';
             return;
         }
-        const existing = this.messagesTarget.querySelector('.synapse-memory-encart');
-        if (existing) existing.closest('.synapse-chat__message--memory')?.remove();
 
-        const factText = String(fact).trim() || '—';
-        const encartWrapper = document.createElement('div');
-        encartWrapper.className = 'synapse-chat__message synapse-chat__message--memory';
-        encartWrapper.innerHTML = `
-            <div class="synapse-chat__avatar synapse-chat__avatar--empty" aria-hidden="true"></div>
-            <div class="synapse-chat__content">
-                <div class="synapse-memory-encart">
-                    <span class="synapse-memory-encart__icon">🧠</span>
-                    <div class="synapse-memory-encart__body">
-                        <span class="synapse-memory-encart__label">Retenir :</span>
-                        <span class="synapse-memory-encart__fact">${this.escapeHtml(factText)}</span>
+        if (this.hasMemoryEmptyTarget) this.memoryEmptyTarget.classList.add('synapse-hidden');
+
+        const html = memories.map(mem => {
+            const scopeLabel = mem.scope === 'conversation' ? 'Discussion' : 'Général';
+            return `
+                <div class="synapse-memory-item" data-memory-id="${mem.id}">
+                    <div class="synapse-memory-item__content" data-memory-text-target="true">${this.escapeHtml(mem.content)}</div>
+                    <div class="synapse-memory-item__meta">
+                        <span>${this.formatDate(mem.created_at)}</span>
+                        <span>${scopeLabel}</span>
                     </div>
-                    <div class="synapse-memory-encart__actions">
-                        <button type="button" class="synapse-memory-encart__btn synapse-memory-encart__btn--reject">Non</button>
-                        <button type="button" class="synapse-memory-encart__btn synapse-memory-encart__btn--conversation">Oui, dans la conversation</button>
-                        <button type="button" class="synapse-memory-encart__btn synapse-memory-encart__btn--user">Oui, toujours</button>
+                    
+                    <div class="synapse-memory-actions">
+                        <button type="button" class="synapse-btn-small" data-action="click->${this.identifier}#editMemory" aria-label="Éditer">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                        </button>
+                        <button type="button" class="synapse-btn-small is-danger" data-action="click->${this.identifier}#deleteMemory" aria-label="Supprimer">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                    </div>
+
+                    <div class="synapse-memory-edit-form">
+                        <textarea class="synapse-memory-edit-input" data-memory-input-target="true">${this.escapeHtml(mem.content)}</textarea>
+                        <div class="synapse-memory-edit-actions">
+                            <button type="button" class="synapse-memory-edit-btn synapse-memory-edit-btn--cancel" data-action="click->${this.identifier}#cancelEditMemory">Annuler</button>
+                            <button type="button" class="synapse-memory-edit-btn synapse-memory-edit-btn--save" data-action="click->${this.identifier}#saveMemory">Enregistrer</button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
-
-        if (insertBeforeLastAssistant) {
-            const lastAssistant = this.messagesTarget.querySelector('.synapse-chat__message--assistant:last-of-type');
-            if (lastAssistant) {
-                lastAssistant.insertAdjacentElement('beforebegin', encartWrapper);
-            } else {
-                this.messagesTarget.appendChild(encartWrapper);
-            }
-        } else {
-            this.messagesTarget.appendChild(encartWrapper);
-        }
-        this.scrollToBottom();
-        requestAnimationFrame(() => this.scrollToBottom());
-
-        const removeEncart = () => {
-            encartWrapper.remove();
-            this.scrollToBottom();
-        };
-
-        const showFeedback = (text) => {
-            encartWrapper.querySelector('.synapse-memory-encart').outerHTML = `
-                <div class="synapse-memory-encart synapse-memory-encart--feedback">${text}</div>
             `;
-            setTimeout(removeEncart, 2500);
-        };
+        }).join('');
 
-        const doConfirm = async (scope) => {
-            const csrfToken = await this.ensureCsrfToken();
-            const headers = { 'Content-Type': 'application/json' };
-            if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
-            try {
-                await fetch(this.memoryConfirmUrlValue || '/synapse/api/memory/confirm', {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify({
-                        fact: proposal.fact,
-                        category: proposal.category ?? 'other',
-                        scope,
-                        conversation_id: conversationId ?? null
-                    })
-                });
-                showFeedback(scope === 'user' ? '✅ Mémorisé.' : '✅ Mémorisé pour cette conversation.');
-            } catch (e) {
-                console.error('[Synapse Memory] Erreur lors de la confirmation:', e);
+        if (this.hasMemoryListTarget) {
+            this.memoryListTarget.innerHTML = html;
+        }
+    }
+
+    async addMemory(event) {
+        event.preventDefault();
+        const input = this.memoryInputTarget;
+        const text = input.value.trim();
+        const submitBtn = event.currentTarget.querySelector('button[type="submit"]');
+
+        if (!text) return;
+
+        input.disabled = true;
+        submitBtn.disabled = true;
+
+        try {
+            const url = this.memoryManualUrlValue || '/synapse/api/memory/manual';
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await this.ensureCsrfToken() },
+                body: JSON.stringify({ fact: text })
+            });
+
+            if (!response.ok) throw new Error('Erreur ajout souvenir');
+
+            input.value = '';
+            this.loadMemories(); // Rafraichissment de la liste complète
+        } catch (e) {
+            console.error(e);
+            alert("Erreur lors de l'enregistrement du fait.");
+        } finally {
+            input.disabled = false;
+            submitBtn.disabled = false;
+        }
+    }
+
+    async deleteMemory(event) {
+        const item = event.currentTarget.closest('.synapse-memory-item');
+        if (!confirm('Oublier définitivement ce souvenir ?')) return;
+
+        const id = item.dataset.memoryId;
+        item.style.opacity = '0.5';
+
+        try {
+            let url = (this.memoryDeleteUrlTemplateValue || '/synapse/api/memory/MEMORY_ID').replace('MEMORY_ID', id);
+            const response = await fetch(url, { method: 'DELETE', headers: { 'X-CSRF-Token': await this.ensureCsrfToken() } });
+            if (!response.ok) throw new Error('Erreur suppression');
+            item.remove();
+
+            // Si la liste est vide après suppression, afficher le state empty
+            if (this.memoryListTarget.children.length === 0 && this.hasMemoryEmptyTarget) {
+                this.memoryEmptyTarget.classList.remove('synapse-hidden');
             }
-        };
+        } catch (e) {
+            console.error(e);
+            item.style.opacity = '1';
+        }
+    }
 
-        const doReject = async () => {
-            const csrfToken = await this.ensureCsrfToken();
-            const headers = { 'Content-Type': 'application/json' };
-            if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+    editMemory(event) {
+        const item = event.currentTarget.closest('.synapse-memory-item');
+        item.classList.add('is-editing');
+        const input = item.querySelector('[data-memory-input-target="true"]');
+        if (input) input.focus();
+    }
+
+    cancelEditMemory(event) {
+        const item = event.currentTarget.closest('.synapse-memory-item');
+        item.classList.remove('is-editing');
+        const input = item.querySelector('[data-memory-input-target="true"]');
+        const textTarget = item.querySelector('[data-memory-text-target="true"]');
+        if (input && textTarget) input.value = textTarget.textContent; // rollback value
+    }
+
+    async saveMemory(event) {
+        const item = event.currentTarget.closest('.synapse-memory-item');
+        const id = item.dataset.memoryId;
+        const input = item.querySelector('[data-memory-input-target="true"]');
+        const textTarget = item.querySelector('[data-memory-text-target="true"]');
+        const newText = input.value.trim();
+
+        if (!newText) return this.cancelEditMemory(event);
+        if (newText === textTarget.textContent) return this.cancelEditMemory(event);
+
+        const btn = event.currentTarget;
+        btn.disabled = true;
+
+        try {
+            let url = (this.memoryUpdateUrlTemplateValue || '/synapse/api/memory/MEMORY_ID').replace('MEMORY_ID', id);
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await this.ensureCsrfToken() },
+                body: JSON.stringify({ fact: newText })
+            });
+
+            if (!response.ok) throw new Error('Erreur maj souvenir');
+
+            textTarget.textContent = newText;
+            item.classList.remove('is-editing');
+        } catch (e) {
+            console.error(e);
+            alert("Erreur lors de la mise à jour.");
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    /* ── 4.5. SÉLECTEUR DE TONS ────────────────────────────────────────────── */
+
+    toggleToneMenu(event) {
+        if (event) event.stopPropagation();
+        if (this.hasToneMenuTarget) {
+            this.toneMenuTarget.classList.toggle('synapse-hidden');
+            this.toneTriggerTarget.classList.toggle('is-open');
+        }
+    }
+
+    selectTone(event) {
+        const { toneKey, toneName, toneEmoji } = event.currentTarget.dataset;
+
+        // Mise à jour de l'UI du trigger
+        if (this.hasCurrentToneEmojiTarget) this.currentToneEmojiTarget.textContent = toneEmoji;
+        if (this.hasCurrentToneNameTarget) this.currentToneNameTarget.textContent = toneName;
+        if (this.hasToneInputTarget) this.toneInputTarget.value = toneKey;
+
+        // Mise à jour de l'état "active" dans le menu
+        if (this.hasToneMenuTarget) {
+            this.toneMenuTarget.querySelectorAll('.synapse-chat-tone-option').forEach(opt => {
+                opt.classList.toggle('active', opt.dataset.toneKey === toneKey);
+            });
+        }
+
+        // Sauvegarde persistante
+        this.savePersistentTone(toneKey, toneName, toneEmoji);
+
+        // Fermer le menu
+        this.toggleToneMenu();
+    }
+
+    closeToneMenuOutside(event) {
+        if (!this.hasTonePickerTarget) return;
+        if (!this.tonePickerTarget.contains(event.target)) {
+            if (this.hasToneMenuTarget && !this.toneMenuTarget.classList.contains('synapse-hidden')) {
+                this.toggleToneMenu();
+            }
+        }
+    }
+
+    savePersistentTone(key, name, emoji) {
+        localStorage.setItem('synapse_chat_tone', JSON.stringify({ key, name, emoji }));
+    }
+
+    loadPersistentTone() {
+        const saved = localStorage.getItem('synapse_chat_tone');
+        if (saved) {
             try {
-                await fetch(this.memoryRejectUrlValue || '/synapse/api/memory/reject', { method: 'POST', headers });
-            } catch (e) { /* Silencieux */ }
-            removeEncart();
-        };
+                const { key, name, emoji } = JSON.parse(saved);
+                if (this.hasCurrentToneEmojiTarget) this.currentToneEmojiTarget.textContent = emoji;
+                if (this.hasCurrentToneNameTarget) this.currentToneNameTarget.textContent = name;
+                if (this.hasToneInputTarget) this.toneInputTarget.value = key;
 
-        encartWrapper.querySelector('.synapse-memory-encart__btn--reject').addEventListener('click', doReject);
-        encartWrapper.querySelector('.synapse-memory-encart__btn--conversation').addEventListener('click', () => doConfirm('conversation'));
-        encartWrapper.querySelector('.synapse-memory-encart__btn--user').addEventListener('click', () => doConfirm('user'));
+                if (this.hasToneMenuTarget) {
+                    this.toneMenuTarget.querySelectorAll('.synapse-chat-tone-option').forEach(opt => {
+                        opt.classList.toggle('active', opt.dataset.toneKey === key);
+                    });
+                }
+            } catch (e) {
+                console.error('Erreur lors du chargement du ton persistant', e);
+            }
+        }
+    }
 
-        setTimeout(() => {
-            if (encartWrapper.isConnected) removeEncart();
-        }, 30000);
+    /* ── 5. UTILITAIRES & MARKDOWN ─────────────────────────────────────────── */
+
+    scrollToBottom() {
+        if (this.hasMessagesTarget) {
+            this.messagesTarget.scrollTop = this.messagesTarget.scrollHeight;
+        }
+    }
+
+    updateUrlConversation(conversationId) {
+        if (this.currentConversationIdValue === conversationId) return;
+        this.currentConversationIdValue = String(conversationId);
+
+        const url = new URL(window.location.href);
+        url.searchParams.set('conversation', conversationId);
+        window.history.pushState({}, '', url.toString());
+
+        // Rafraîchir la sidebar côté JS (création visuelle nouvelle conv)
+        if (this.hasSidebarTarget) {
+            this.loadConversations();
+        }
+    }
+
+    updateSidebarConversationTitle(id, title) {
+        if (!this.hasConversationsListTarget) return;
+        const item = this.conversationsListTarget.querySelector(`[data-conversation-id="${id}"]`);
+        if (item) {
+            const titleTarget = item.querySelector('[data-title-target="true"]');
+            if (titleTarget) titleTarget.textContent = title;
+        }
     }
 
     escapeHtml(text) {
         const div = document.createElement('div');
-        div.appendChild(document.createTextNode(text));
+        div.textContent = text;
         return div.innerHTML;
     }
 
-    updateUrlWithConversationId(conversationId) {
-        const url = new URL(window.location.href);
-        const currentConversationId = url.searchParams.get('conversation');
+    formatDate(dateString) {
+        const date = new Date(dateString);
+        const diff = Date.now() - date;
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        if (days === 0) return 'Aujourd\'hui';
+        if (days === 1) return 'Hier';
+        if (days < 7) return `Il y a ${days} j`;
+        return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    }
 
-        // Only dispatch event if this is a NEW conversation (not already in URL)
-        const isNewConversation = currentConversationId !== conversationId;
+    async ensureCsrfToken() {
+        if (this._csrfToken) return this._csrfToken;
+        const fromMeta = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (fromMeta) return fromMeta;
+        const fromData = this.element?.dataset?.csrfToken;
+        if (fromData) return fromData;
+        try {
+            const r = await fetch(this.csrfUrlValue || '/synapse/api/csrf-token');
+            const data = await r.json();
+            if (data?.token) this._csrfToken = data.token;
+            return this._csrfToken;
+        } catch { return ''; }
+    }
 
-        url.searchParams.set('conversation', conversationId);
+    async loadMarked() {
+        try {
+            const m = await import('marked');
+            this.markedParse = m.parse || m.default?.parse || m.marked?.parse;
+        } catch (_) { /* Support fallback manuel en dessous */ }
+    }
 
-        // Update URL without reloading page
-        window.history.pushState({}, '', url.toString());
-
-        // Dispatch event for sidebar to refresh ONLY for new conversations
-        if (isNewConversation) {
-            document.dispatchEvent(new CustomEvent('assistant:conversation-created', {
-                detail: { conversationId, title: 'Nouvelle conversation' }
-            }));
+    parseMarkdown(text) {
+        if (this.markedParse) {
+            try { return this.markedParse(text); } catch (e) { }
         }
+        // Fallback manuel minimal
+        let html = text;
+        // Actions buttons (links)
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" class="synapse-chat-btn-action" target="_blank">$1</a>');
+        // Group buttons
+        html = html.replace(/(<a class="synapse-chat-btn-action"[^>]*>.*?<\/a>(?:<br>)?){2,}/g, match => `<div class="synapse-chat-action-group">${match.replace(/<br>/g, '')}</div>`);
+        // Basic markup
+        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>');
+        html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>').replace(/`([^`]+)`/g, '<code>$1</code>');
+        html = html.replace(/\n/g, '<br>');
+        return html;
     }
 }
