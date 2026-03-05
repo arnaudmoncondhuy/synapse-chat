@@ -210,8 +210,14 @@ class ChatApiController extends AbstractController
                         $usage = $result['usage'] ?? [];
                         $safetyRatings = [];
                         foreach ($result['safety'] ?? [] as $rating) {
-                            if (isset($rating['category'])) {
-                                $safetyRatings[$rating['category']] = $rating;
+                            if (
+                                isset($rating['category'], $rating['probability'])
+                                && is_string($rating['category'])
+                                && is_string($rating['probability'])
+                            ) {
+                                /** @var array{category: string, probability: string} $typedRating */
+                                $typedRating = ['category' => $rating['category'], 'probability' => $rating['probability']];
+                                $safetyRatings[$rating['category']] = $typedRating;
                             }
                         }
 
