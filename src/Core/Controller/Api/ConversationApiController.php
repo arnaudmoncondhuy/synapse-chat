@@ -84,10 +84,13 @@ class ConversationApiController extends AbstractController
             return new JsonResponse(['error' => 'User not authenticated'], Response::HTTP_UNAUTHORIZED);
         }
 
-        $data = json_decode($request->getContent(), true);
-        $title = $data['title'] ?? '';
+        $rawJson = $request->getContent();
+        $decoded = json_decode(is_string($rawJson) ? $rawJson : '{}', true);
+        $data = is_array($decoded) ? $decoded : [];
+        $titleRaw = $data['title'] ?? '';
+        $title = is_string($titleRaw) ? $titleRaw : '';
 
-        if (empty($title)) {
+        if ($title === '') {
             return new JsonResponse(['error' => 'Title is required'], Response::HTTP_BAD_REQUEST);
         }
 

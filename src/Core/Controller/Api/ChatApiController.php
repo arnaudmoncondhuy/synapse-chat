@@ -83,11 +83,21 @@ class ChatApiController extends AbstractController
             $profiler->disable();
         }
 
-        $data = json_decode($request->getContent(), true) ?? [];
-        $message = $data['message'] ?? '';
-        $options = $data['options'] ?? [];
-        $options['debug'] = $data['debug'] ?? ($options['debug'] ?? false);
-        $conversationId = $data['conversation_id'] ?? null;
+        $rawJson = $request->getContent();
+        $decoded = json_decode(is_string($rawJson) ? $rawJson : '{}', true);
+        $data = is_array($decoded) ? $decoded : [];
+
+        $messageRaw = $data['message'] ?? '';
+        $message = is_string($messageRaw) ? $messageRaw : '';
+
+        $optionsRaw = $data['options'] ?? [];
+        $options = is_array($optionsRaw) ? $optionsRaw : [];
+
+        $debugRaw = $data['debug'] ?? ($options['debug'] ?? false);
+        $options['debug'] = (bool) $debugRaw;
+
+        $conversationIdRaw = $data['conversation_id'] ?? null;
+        $conversationId = is_string($conversationIdRaw) ? $conversationIdRaw : null;
         $options['conversation_id'] = $conversationId;  // Pass to ChatService for debug logging
 
         // Load conversation if ID provided and persistence enabled
@@ -105,7 +115,7 @@ class ChatApiController extends AbstractController
             }
         }
 
-        $response = new StreamedResponse(function () use ($message, $options, $conversation) {
+        $response = new StreamedResponse(function () use ($message, $options, $conversation, $conversationId) {
             // CRITICAL: Disable ALL output buffering to prevent Symfony Debug Toolbar injection
             // The toolbar tries to inject HTML into buffered output, corrupting NDJSON stream
             while (ob_get_level() > 0) {
@@ -127,7 +137,8 @@ class ChatApiController extends AbstractController
             echo ":" . str_repeat(' ', 2048) . "\n";
             flush();
 
-            if (empty($message) && !($options['reset_conversation'] ?? false)) {
+            $isReset = isset($options['reset_conversation']) && $options['reset_conversation'] === true;
+            if (empty($message) && !$isReset) {
                 $sendEvent('error', 'SynapseMessage is required.');
 
                 return;
@@ -152,7 +163,14 @@ class ChatApiController extends AbstractController
                         $options['history'] = $this->messageFormatter->entitiesToApiFormat($dbMessages);
                     } else {
                         // Fallback (legacy risks sending encrypted content)
-                        $options['history'] = $dbMessages;
+                        $history = [];
+                        foreach ($dbMessages as $dbMsg) {
+                            $history[] = [
+                                'role' => $dbMsg->getRole(),
+                                'content' => $dbMsg->getContent(),
+                            ];
+                        }
+                        $options['history'] = $history;
                     }
                 }
 
@@ -186,23 +204,57 @@ class ChatApiController extends AbstractController
 
                 // Estimate cost for spending limit check (before LLM call)
                 if ($this->tokenCostEstimator !== null) {
-                    $estimateContents = $options['history'] ?? [];
+                    $historyRaw = $options['history'] ?? [];
+                    /** @var array<int, array{role: string, content?: string|null}> $estimateContents */
+                    $estimateContents = is_array($historyRaw) ? $historyRaw : [];
+
                     if ($message !== '') {
                         $estimateContents[] = ['role' => 'user', 'content' => $message];
                     }
                     if (!empty($estimateContents)) {
                         $estimate = $this->tokenCostEstimator->estimateCost($estimateContents);
-                        $options['estimated_cost_reference'] = $estimate['cost_reference'];
+                        $options['estimated_cost_reference'] = (float) $estimate['cost_reference'];
                     }
                 }
 
+                // Build typed options array for ChatService::ask
+                /** @var array{tone?: string, history?: array<int, array<string, mixed>>, stateless?: bool, debug?: bool, preset?: \ArnaudMoncondhuy\SynapseCore\Storage\Entity\SynapsePreset, conversation_id?: string, user_id?: string, estimated_cost_reference?: float, streaming?: bool, reset_conversation?: bool} $typedOptions */
+                $typedOptions = [];
+                if (isset($options['tone']) && is_string($options['tone'])) {
+                    $typedOptions['tone'] = $options['tone'];
+                }
+                if (isset($options['history']) && is_array($options['history'])) {
+                    /** @var array<int, array<string, mixed>> $history */
+                    $history = $options['history'];
+                    $typedOptions['history'] = $history;
+                }
+                if (isset($options['stateless'])) {
+                    $typedOptions['stateless'] = (bool) $options['stateless'];
+                }
+                $typedOptions['debug'] = (bool) $options['debug'];
+                if ($conversationId !== null) {
+                    $typedOptions['conversation_id'] = $conversationId;
+                }
+                if (isset($options['user_id']) && is_string($options['user_id'])) {
+                    $typedOptions['user_id'] = $options['user_id'];
+                }
+                if (isset($options['estimated_cost_reference']) && is_numeric($options['estimated_cost_reference'])) {
+                    $typedOptions['estimated_cost_reference'] = (float) $options['estimated_cost_reference'];
+                }
+                if (isset($options['streaming'])) {
+                    $typedOptions['streaming'] = (bool) $options['streaming'];
+                }
+                if (isset($options['reset_conversation'])) {
+                    $typedOptions['reset_conversation'] = (bool) $options['reset_conversation'];
+                }
+
                 // Execute chat (ChatService will handle adding the new user message to history)
-                $result = $this->chatService->ask($message, $options, $onStatusUpdate, $onToken, $onToolExecuted);
+                $result = $this->chatService->ask($message, $typedOptions, $onStatusUpdate, $onToken, $onToolExecuted);
 
                 // Save BOTH user message and assistant response to database after processing
                 if ($conversation && $this->conversationManager) {
                     // Save user message (pas d'appel LLM associé)
-                    if (!empty($message)) {
+                    if ($message !== '') {
                         $this->conversationManager->saveMessage($conversation, MessageRole::USER, $message);
                     }
 
@@ -339,7 +391,7 @@ class ChatApiController extends AbstractController
                     }
                 }
 
-                $sendEvent('error', $errorMessage);
+                $sendEvent('error', (string) $errorMessage);
             }
         });
 
