@@ -27,10 +27,6 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
     {
         // Enregistrement du namespace Twig @Synapse
         $viewsPath = \dirname(__DIR__) . '/Resources/views';
-        if (!is_dir($viewsPath)) {
-            // Fallback for vendor install or other structures
-            $viewsPath = \dirname(__DIR__, 2) . '/Resources/views';
-        }
 
         $container->prependExtensionConfig('twig', [
             'paths' => [
