@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ArnaudMoncondhuy\SynapseChat\Core\Controller\Api;
+namespace ArnaudMoncondhuy\SynapseChat\Controller\Api\Api;
 
 use ArnaudMoncondhuy\SynapseCore\Contract\PermissionCheckerInterface;
-use ArnaudMoncondhuy\SynapseCore\Core\Chat\ChatService;
+use ArnaudMoncondhuy\SynapseCore\Engine\ChatService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;

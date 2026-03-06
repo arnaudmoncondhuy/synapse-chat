@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ArnaudMoncondhuy\SynapseChat\Infrastructure\Controller;
+namespace ArnaudMoncondhuy\SynapseChat\Controller\UI;
 
 use ArnaudMoncondhuy\SynapseCore\Contract\PermissionCheckerInterface;
-use ArnaudMoncondhuy\SynapseCore\Core\Manager\ConversationManager;
+use ArnaudMoncondhuy\SynapseCore\Manager\ConversationManager;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;

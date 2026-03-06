@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ArnaudMoncondhuy\SynapseChat\Core\Controller\Api;
+namespace ArnaudMoncondhuy\SynapseChat\Controller\Api\Api;
 
 use ArnaudMoncondhuy\SynapseCore\Contract\ConversationOwnerInterface;
 use ArnaudMoncondhuy\SynapseCore\Contract\PermissionCheckerInterface;
-use ArnaudMoncondhuy\SynapseCore\Core\Chat\ChatService;
-use ArnaudMoncondhuy\SynapseCore\Core\Formatter\MessageFormatter;
-use ArnaudMoncondhuy\SynapseCore\Core\Manager\ConversationManager;
+use ArnaudMoncondhuy\SynapseCore\Engine\ChatService;
+use ArnaudMoncondhuy\SynapseCore\Formatter\MessageFormatter;
+use ArnaudMoncondhuy\SynapseCore\Manager\ConversationManager;
 use ArnaudMoncondhuy\SynapseCore\Shared\Enum\MessageRole;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmAuthenticationException;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmException;
@@ -37,8 +37,8 @@ class ChatApiController extends AbstractController
         private ?ConversationManager $conversationManager = null,
         private ?MessageFormatter $messageFormatter = null,
         private ?CsrfTokenManagerInterface $csrfTokenManager = null,
-        private ?\ArnaudMoncondhuy\SynapseCore\Core\Accounting\TokenAccountingService $tokenAccountingService = null,
-        private ?\ArnaudMoncondhuy\SynapseCore\Core\Accounting\TokenCostEstimator $tokenCostEstimator = null,
+        private ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenAccountingService $tokenAccountingService = null,
+        private ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenCostEstimator $tokenCostEstimator = null,
     ) {
     }
 

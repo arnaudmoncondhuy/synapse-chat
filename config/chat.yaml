@@ -8,11 +8,11 @@ services:
     public: false
 
   # ── API Controllers ────────────────────────────────────────────────────────
-  ArnaudMoncondhuy\SynapseChat\Core\Controller\Api\:
+  ArnaudMoncondhuy\SynapseChat\Controller\Api\Api\:
     resource: '../src/Core/Controller/Api/'
     tags: ['controller.service_arguments']
 
   # ── Chat UI Controller (Full page) ────────────────────────────────────────
-  ArnaudMoncondhuy\SynapseChat\Infrastructure\Controller\ChatUiController:
+  ArnaudMoncondhuy\SynapseChat\Controller\UI\ChatUiController:
     tags: ['controller.service_arguments']
 

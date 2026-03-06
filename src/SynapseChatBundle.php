@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ArnaudMoncondhuy\SynapseChat;
 
-use ArnaudMoncondhuy\SynapseChat\Infrastructure\DependencyInjection\SynapseChatExtension;
+use ArnaudMoncondhuy\SynapseChat\DependencyInjection\SynapseChatExtension;
 use Symfony\Component\DependencyInjection\Extension\ExtensionInterface;
 use Symfony\Component\HttpKernel\Bundle\Bundle;
 

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ArnaudMoncondhuy\SynapseChat\Infrastructure\DependencyInjection;
+namespace ArnaudMoncondhuy\SynapseChat\DependencyInjection;
 
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
