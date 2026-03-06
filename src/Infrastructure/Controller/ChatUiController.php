@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ArnaudMoncondhuy\SynapseChat\Infrastructure\Controller;
 
-use ArnaudMoncondhuy\SynapseCore\Core\Manager\ConversationManager;
 use ArnaudMoncondhuy\SynapseCore\Contract\PermissionCheckerInterface;
+use ArnaudMoncondhuy\SynapseCore\Core\Manager\ConversationManager;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -25,7 +25,8 @@ class ChatUiController extends AbstractController
         private PermissionCheckerInterface $permissionChecker,
         private \ArnaudMoncondhuy\SynapseCore\Contract\ConfigProviderInterface $configProvider,
         private ?ConversationManager $conversationManager = null,
-    ) {}
+    ) {
+    }
 
     public function __invoke(Request $request, ?Profiler $profiler): Response
     {

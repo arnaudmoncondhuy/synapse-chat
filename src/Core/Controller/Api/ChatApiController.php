@@ -4,17 +4,17 @@ declare(strict_types=1);
 
 namespace ArnaudMoncondhuy\SynapseChat\Core\Controller\Api;
 
+use ArnaudMoncondhuy\SynapseCore\Contract\ConversationOwnerInterface;
+use ArnaudMoncondhuy\SynapseCore\Contract\PermissionCheckerInterface;
+use ArnaudMoncondhuy\SynapseCore\Core\Chat\ChatService;
+use ArnaudMoncondhuy\SynapseCore\Core\Formatter\MessageFormatter;
+use ArnaudMoncondhuy\SynapseCore\Core\Manager\ConversationManager;
+use ArnaudMoncondhuy\SynapseCore\Shared\Enum\MessageRole;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmAuthenticationException;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmException;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmQuotaException;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmRateLimitException;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmServiceUnavailableException;
-use ArnaudMoncondhuy\SynapseCore\Contract\ConversationOwnerInterface;
-use ArnaudMoncondhuy\SynapseCore\Shared\Enum\MessageRole;
-use ArnaudMoncondhuy\SynapseCore\Core\Chat\ChatService;
-use ArnaudMoncondhuy\SynapseCore\Core\Formatter\MessageFormatter;
-use ArnaudMoncondhuy\SynapseCore\Core\Manager\ConversationManager;
-use ArnaudMoncondhuy\SynapseCore\Contract\PermissionCheckerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -39,7 +39,8 @@ class ChatApiController extends AbstractController
         private ?CsrfTokenManagerInterface $csrfTokenManager = null,
         private ?\ArnaudMoncondhuy\SynapseCore\Core\Accounting\TokenAccountingService $tokenAccountingService = null,
         private ?\ArnaudMoncondhuy\SynapseCore\Core\Accounting\TokenCostEstimator $tokenCostEstimator = null,
-    ) {}
+    ) {
+    }
 
     /**
      * Traite une nouvelle requête de chat et retourne un flux d'événements.
@@ -63,10 +64,8 @@ class ChatApiController extends AbstractController
         if ($this->getParameter('synapse.security.api_csrf_enabled') && $this->csrfTokenManager) {
             $token = $request->headers->get('X-CSRF-Token') ?? $request->request->get('_csrf_token');
             $token = (string) $token;
-            if ($token === '') {
-                throw $this->createAccessDeniedException(
-                    'Jeton CSRF manquant. Le front doit envoyer X-CSRF-Token (récupéré via GET %synapse.chat_api_prefix%/csrf-token). Sinon : synapse.security.api_csrf_enabled: false dans config.'
-                );
+            if ('' === $token) {
+                throw $this->createAccessDeniedException('Jeton CSRF manquant. Le front doit envoyer X-CSRF-Token (récupéré via GET %synapse.chat_api_prefix%/csrf-token). Sinon : synapse.security.api_csrf_enabled: false dans config.');
             }
             if (!$this->isCsrfTokenValid('synapse_api', $token)) {
                 throw $this->createAccessDeniedException('Jeton CSRF invalide ou expiré. Rechargez la page (F5).');
@@ -125,7 +124,7 @@ class ChatApiController extends AbstractController
 
             // Helper to send NDJSON event
             $sendEvent = function (string $type, mixed $payload): void {
-                echo json_encode(['type' => $type, 'payload' => $payload], JSON_INVALID_UTF8_IGNORE | JSON_THROW_ON_ERROR) . "\n";
+                echo json_encode(['type' => $type, 'payload' => $payload], JSON_INVALID_UTF8_IGNORE | JSON_THROW_ON_ERROR)."\n";
                 // Force flush explicitly
                 if (ob_get_length() > 0) {
                     ob_flush();
@@ -134,10 +133,10 @@ class ChatApiController extends AbstractController
             };
 
             // Send padding to bypass browser/proxy buffering (approx 2KB)
-            echo ":" . str_repeat(' ', 2048) . "\n";
+            echo ':'.str_repeat(' ', 2048)."\n";
             flush();
 
-            $isReset = isset($options['reset_conversation']) && $options['reset_conversation'] === true;
+            $isReset = isset($options['reset_conversation']) && true === $options['reset_conversation'];
             if (empty($message) && !$isReset) {
                 $sendEvent('error', 'SynapseMessage is required.');
 
@@ -186,7 +185,7 @@ class ChatApiController extends AbstractController
 
                 // Tool executed callback — envoie un événement immédiat pour les outils
                 $onToolExecuted = function (string $toolName, mixed $toolResult) use ($sendEvent, $conversation): void {
-                    $isProposeToRemember = $toolName === 'propose_to_remember' || str_ends_with($toolName, 'propose_to_remember');
+                    $isProposeToRemember = 'propose_to_remember' === $toolName || str_ends_with($toolName, 'propose_to_remember');
                     if ($isProposeToRemember && \is_array($toolResult) && ($toolResult['__synapse_action'] ?? '') === 'memory_proposal') {
                         $sendEvent('tool_executed', [
                             'tool' => 'propose_to_remember',
@@ -203,12 +202,12 @@ class ChatApiController extends AbstractController
                 }
 
                 // Estimate cost for spending limit check (before LLM call)
-                if ($this->tokenCostEstimator !== null) {
+                if (null !== $this->tokenCostEstimator) {
                     $historyRaw = $options['history'] ?? [];
                     /** @var array<int, array{role: string, content?: string|null}> $estimateContents */
                     $estimateContents = is_array($historyRaw) ? $historyRaw : [];
 
-                    if ($message !== '') {
+                    if ('' !== $message) {
                         $estimateContents[] = ['role' => 'user', 'content' => $message];
                     }
                     if (!empty($estimateContents)) {
@@ -232,7 +231,7 @@ class ChatApiController extends AbstractController
                     $typedOptions['stateless'] = (bool) $options['stateless'];
                 }
                 $typedOptions['debug'] = (bool) $options['debug'];
-                if ($conversationId !== null) {
+                if (null !== $conversationId) {
                     $typedOptions['conversation_id'] = $conversationId;
                 }
                 if (isset($options['user_id']) && is_string($options['user_id'])) {
@@ -254,7 +253,7 @@ class ChatApiController extends AbstractController
                 // Save BOTH user message and assistant response to database after processing
                 if ($conversation && $this->conversationManager) {
                     // Save user message (pas d'appel LLM associé)
-                    if ($message !== '') {
+                    if ('' !== $message) {
                         $this->conversationManager->saveMessage($conversation, MessageRole::USER, $message);
                     }
 
@@ -274,26 +273,26 @@ class ChatApiController extends AbstractController
                         }
 
                         $metadata = [
-                            'prompt_tokens'     => $usage['prompt_tokens'] ?? 0,
+                            'prompt_tokens' => $usage['prompt_tokens'] ?? 0,
                             'completion_tokens' => $usage['completion_tokens'] ?? 0,
-                            'thinking_tokens'   => $usage['thinking_tokens'] ?? 0,
-                            'safety_ratings'    => $safetyRatings,
-                            'model'             => $result['model'] ?? null,
-                            'preset_id'         => $result['preset_id'] ?? null,
-                            'metadata'          => ['debug_id' => $result['debug_id'] ?? null],
+                            'thinking_tokens' => $usage['thinking_tokens'] ?? 0,
+                            'safety_ratings' => $safetyRatings,
+                            'model' => $result['model'] ?? null,
+                            'preset_id' => $result['preset_id'] ?? null,
+                            'metadata' => ['debug_id' => $result['debug_id'] ?? null],
                         ];
 
                         // Log l'appel LLM dans synapse_llm_call et récupérer le callId
                         $callId = null;
-                        if ($this->tokenAccountingService !== null) {
+                        if (null !== $this->tokenAccountingService) {
                             $llmCall = $this->tokenAccountingService->logUsage(
                                 'chat',
                                 'chat_turn',
                                 $result['model'] ?? 'unknown',
                                 [
-                                    'prompt_tokens'     => $usage['prompt_tokens'] ?? 0,
+                                    'prompt_tokens' => $usage['prompt_tokens'] ?? 0,
                                     'completion_tokens' => $usage['completion_tokens'] ?? 0,
-                                    'thinking_tokens'   => $usage['thinking_tokens'] ?? 0,
+                                    'thinking_tokens' => $usage['thinking_tokens'] ?? 0,
                                 ],
                                 $user instanceof ConversationOwnerInterface ? (string) $user->getId() : null,
                                 $conversation->getId(),
@@ -341,16 +340,16 @@ class ChatApiController extends AbstractController
                                 }
 
                                 // Track title generation cost (stateless call)
-                                if ($this->tokenAccountingService !== null && !empty($titleResult['usage'])) {
+                                if (null !== $this->tokenAccountingService && !empty($titleResult['usage'])) {
                                     $titleUser = $this->getUser();
                                     $this->tokenAccountingService->logUsage(
                                         'chat',
                                         'title_generation',
                                         $titleResult['model'] ?? 'unknown',
                                         [
-                                            'prompt_tokens'     => $titleResult['usage']['prompt_tokens'] ?? 0,
+                                            'prompt_tokens' => $titleResult['usage']['prompt_tokens'] ?? 0,
                                             'completion_tokens' => $titleResult['usage']['completion_tokens'] ?? 0,
-                                            'thinking_tokens'   => $titleResult['usage']['thinking_tokens'] ?? 0,
+                                            'thinking_tokens' => $titleResult['usage']['thinking_tokens'] ?? 0,
                                         ],
                                         $titleUser instanceof ConversationOwnerInterface ? (string) $titleUser->getId() : null,
                                         $conversation->getId(),
@@ -374,11 +373,11 @@ class ChatApiController extends AbstractController
                 } elseif ($e instanceof LlmQuotaException) {
                     $errorMessage = "⚠️ Quota dépassé : La limite de consommation de l'IA a été atteinte.";
                 } elseif ($e instanceof LlmRateLimitException) {
-                    $errorMessage = "⏳ Trop de requêtes : Veuillez patienter un instant avant de réessayer.";
+                    $errorMessage = '⏳ Trop de requêtes : Veuillez patienter un instant avant de réessayer.';
                 } elseif ($e instanceof LlmServiceUnavailableException) {
-                    $errorMessage = "🔧 Service indisponible : Le service IA est temporairement inaccessible.";
+                    $errorMessage = '🔧 Service indisponible : Le service IA est temporairement inaccessible.';
                 } elseif ($e instanceof LlmException) {
-                    $errorMessage = "🤖 Erreur IA : " . $e->getMessage();
+                    $errorMessage = '🤖 Erreur IA : '.$e->getMessage();
                 } elseif (str_contains($errorMessage, 'timeout') || str_contains($errorMessage, 'Timeout')) {
                     $errorMessage = "⏱️ Timeout : L'IA a mis trop de temps à répondre.";
                 } else {
@@ -387,7 +386,7 @@ class ChatApiController extends AbstractController
                         $file = basename($e->getFile());
                         $errorMessage = sprintf('❌ %s (%s:%d)', $errorMessage, $file, $e->getLine());
                     } else {
-                        $errorMessage = "❌ Erreur système : Une erreur inattendue est survenue.";
+                        $errorMessage = '❌ Erreur système : Une erreur inattendue est survenue.';
                     }
                 }
 

@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace ArnaudMoncondhuy\SynapseChat\Core\Controller\Api;
 
-use ArnaudMoncondhuy\SynapseCore\Core\Chat\ChatService;
 use ArnaudMoncondhuy\SynapseCore\Contract\PermissionCheckerInterface;
+use ArnaudMoncondhuy\SynapseCore\Core\Chat\ChatService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -22,7 +22,8 @@ class ResetController extends AbstractController
         private ChatService $chatService,
         private PermissionCheckerInterface $permissionChecker,
         private ?CsrfTokenManagerInterface $csrfTokenManager = null,
-    ) {}
+    ) {
+    }
 
     /**
      * Réinitialise explicitement la conversation courante.

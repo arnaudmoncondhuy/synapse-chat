@@ -13,17 +13,18 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * API REST pour la gestion des conversations
+ * API REST pour la gestion des conversations.
  */
 #[Route('%synapse.chat_api_prefix%/conversations')]
 class ConversationApiController extends AbstractController
 {
     public function __construct(
-        private ConversationManager $conversationManager
-    ) {}
+        private ConversationManager $conversationManager,
+    ) {
+    }
 
     /**
-     * Liste les conversations de l'utilisateur
+     * Liste les conversations de l'utilisateur.
      */
     #[Route('', name: 'synapse_api_conversations_list', methods: ['GET'])]
     public function list(Request $request): JsonResponse
@@ -36,7 +37,7 @@ class ConversationApiController extends AbstractController
         $limit = (int) $request->query->get('limit', 50);
         $conversations = $this->conversationManager->getUserConversations($user, null, $limit);
 
-        $data = array_map(fn($conv) => [
+        $data = array_map(fn ($conv) => [
             'id' => $conv->getId(),
             'title' => $conv->getTitle(),
             'created_at' => $conv->getCreatedAt()->format('c'),
@@ -49,7 +50,7 @@ class ConversationApiController extends AbstractController
     }
 
     /**
-     * Supprime une conversation (soft delete)
+     * Supprime une conversation (soft delete).
      */
     #[Route('/{id}', name: 'synapse_api_conversations_delete', methods: ['DELETE'])]
     public function delete(string $id): JsonResponse
@@ -74,7 +75,7 @@ class ConversationApiController extends AbstractController
     }
 
     /**
-     * Renomme une conversation
+     * Renomme une conversation.
      */
     #[Route('/{id}/rename', name: 'synapse_api_conversations_rename', methods: ['PATCH'])]
     public function rename(string $id, Request $request): JsonResponse
@@ -90,7 +91,7 @@ class ConversationApiController extends AbstractController
         $titleRaw = $data['title'] ?? '';
         $title = is_string($titleRaw) ? $titleRaw : '';
 
-        if ($title === '') {
+        if ('' === $title) {
             return new JsonResponse(['error' => 'Title is required'], Response::HTTP_BAD_REQUEST);
         }
 
@@ -112,7 +113,7 @@ class ConversationApiController extends AbstractController
     }
 
     /**
-     * Récupère les messages d'une conversation
+     * Récupère les messages d'une conversation.
      */
     #[Route('/{id}/messages', name: 'synapse_api_conversations_messages', methods: ['GET'])]
     public function messages(string $id): JsonResponse
@@ -130,7 +131,7 @@ class ConversationApiController extends AbstractController
 
             $messages = $this->conversationManager->getMessages($conversation);
 
-            $data = array_map(fn($msg) => [
+            $data = array_map(fn ($msg) => [
                 'id' => $msg->getId(),
                 'role' => $msg->getRole()->value,
                 'content' => $msg->getDecryptedContent(),
