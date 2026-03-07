@@ -217,7 +217,7 @@ class ChatApiController extends AbstractController
                 }
 
                 // Build typed options array for ChatService::ask
-                /** @var array{tone?: string, history?: array<int, array<string, mixed>>, stateless?: bool, debug?: bool, preset?: \ArnaudMoncondhuy\SynapseCore\Storage\Entity\SynapsePreset, conversation_id?: string, user_id?: string, estimated_cost_reference?: float, streaming?: bool, reset_conversation?: bool} $typedOptions */
+                /** @var array{tone?: string, history?: array<int, array<string, mixed>>, stateless?: bool, debug?: bool, preset?: \ArnaudMoncondhuy\SynapseCore\Storage\Entity\SynapseModelPreset, conversation_id?: string, user_id?: string, estimated_cost_reference?: float, streaming?: bool, reset_conversation?: bool} $typedOptions */
                 $typedOptions = [];
                 if (isset($options['tone']) && is_string($options['tone'])) {
                     $typedOptions['tone'] = $options['tone'];
