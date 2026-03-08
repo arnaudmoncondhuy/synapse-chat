@@ -271,7 +271,7 @@ class ChatApiController extends AbstractController
                                     'image_url' => ['url' => 'data:' . $img['mime_type'] . ';base64,' . $img['data']],
                                 ];
                             }
-                            $userMetadata['parts'] = $parts;
+                            $userMetadata['metadata'] = ['parts' => $parts];
                         }
                         $this->conversationManager->saveMessage($conversation, MessageRole::USER, $message ?: '[image]', $userMetadata);
                     }
