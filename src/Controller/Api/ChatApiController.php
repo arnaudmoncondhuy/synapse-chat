@@ -88,6 +88,12 @@ class ChatApiController extends AbstractController
         $messageRaw = $data['message'] ?? '';
         $message = is_string($messageRaw) ? $messageRaw : '';
 
+        // Vision: images optionnelles [['mime_type' => 'image/jpeg', 'data' => 'base64...']]
+        $imagesRaw = $data['images'] ?? [];
+        $images = is_array($imagesRaw)
+            ? array_values(array_filter($imagesRaw, fn ($i) => is_array($i) && isset($i['data'], $i['mime_type']) && is_string($i['data']) && is_string($i['mime_type'])))
+            : [];
+
         $optionsRaw = $data['options'] ?? [];
         $options = is_array($optionsRaw) ? $optionsRaw : [];
 
@@ -113,7 +119,7 @@ class ChatApiController extends AbstractController
             }
         }
 
-        $response = new StreamedResponse(function () use ($message, $options, $conversation, $conversationId) {
+        $response = new StreamedResponse(function () use ($message, $options, $conversation, $conversationId, $images) {
             // CRITICAL: Disable ALL output buffering to prevent Symfony Debug Toolbar injection
             // The toolbar tries to inject HTML into buffered output, corrupting NDJSON stream
             while (ob_get_level() > 0) {
@@ -247,7 +253,7 @@ class ChatApiController extends AbstractController
                 }
 
                 // Execute chat (ChatService will handle adding the new user message to history)
-                $result = $this->chatService->ask($message, $typedOptions, $onStatusUpdate, $onToken, $onToolExecuted);
+                $result = $this->chatService->ask($message, $typedOptions, $onStatusUpdate, $onToken, $onToolExecuted, $images);
 
                 // Save BOTH user message and assistant response to database after processing
                 if ($conversation && $this->conversationManager) {

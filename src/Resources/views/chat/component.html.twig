@@ -54,6 +54,7 @@
      data-{{ controller_override }}-debug-url-template-value="{{ path('synapse_debug_show', {'id': 'DEBUG_ID'}) }}"
      data-{{ controller_override }}-debug-value="{{ (debug_mode|default(false) and synapse_can_debug()) ? 'true' : 'false' }}"
      data-{{ controller_override }}-stateless-value="{{ app.request.query.get('stateless', false) ? 'true' : 'false' }}"
+     data-{{ controller_override }}-supports-vision-value="{{ synapse_active_model_supports('vision') ? 'true' : 'false' }}"
      data-csrf-token="{{ csrf_token('synapse_api') }}"
      {% for k, v in attr|default({}) %} {{ k }}="{{ v|e('html_attr') }}"{% endfor %}>
 
@@ -186,6 +187,8 @@
         <div class="synapse-chat-input-area">
             <form class="synapse-chat-form" data-action="submit->{{ controller_override }}#send" id="chat-form">
                 <div class="synapse-chat-input-wrapper">
+                    {# Zone de preview des images attachées #}
+                    <div class="synapse-chat-image-preview synapse-hidden" data-{{ controller_override }}-target="imagePreview"></div>
                     <textarea 
                         class="synapse-chat-textarea"
                         data-{{ controller_override }}-target="input" 
@@ -195,6 +198,13 @@
 
                     <div class="synapse-chat-toolbar">
                         <div class="synapse-chat-toolbar__left">
+                            {# Bouton d'attache d'image (visible uniquement si le modèle supporte la vision) #}
+                            {% if synapse_active_model_supports('vision') %}
+                                <button type="button" class="synapse-chat-btn-attach" data-action="click->{{ controller_override }}#attachImage" data-{{ controller_override }}-target="attachBtn" aria-label="Joindre une image" title="Joindre une image">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                </button>
+                                <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="synapse-hidden" data-{{ controller_override }}-target="fileInput" data-action="change->{{ controller_override }}#handleFileInput">
+                            {% endif %}
                             {% set tones = synapse_get_tones() %}
                             {% if tones is not empty %}
                                 <div class="synapse-chat-tone-picker" data-{{ controller_override }}-target="tonePicker">

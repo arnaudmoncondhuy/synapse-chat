@@ -1325,3 +1325,92 @@
 .synapse-theme-dark .synapse-chat-message__system-content {
     background: var(--synapse-chat-bg-input);
 }
+/* ── Vision : Bouton d'attache d'image ─────────────────────────────────── */
+.synapse-chat-btn-attach {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--synapse-chat-radius-sm);
+    background: transparent;
+    border: none;
+    color: var(--synapse-chat-text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    flex-shrink: 0;
+}
+
+.synapse-chat-btn-attach:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--synapse-chat-text);
+}
+
+.synapse-theme-dark .synapse-chat-btn-attach:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Vision : Preview des images attachées ─────────────────────────────── */
+.synapse-chat-image-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 4px 4px;
+}
+
+.synapse-chat-image-preview__item {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    border-radius: var(--synapse-chat-radius-sm);
+    overflow: hidden;
+    border: 1px solid var(--synapse-chat-border);
+    flex-shrink: 0;
+}
+
+.synapse-chat-image-preview__item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.synapse-chat-image-preview__remove {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    border: none;
+    color: #fff;
+    font-size: 11px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+}
+
+.synapse-chat-image-preview__remove:hover {
+    background: rgba(220, 38, 38, 0.85);
+}
+
+/* Preview dans les bulles de message */
+.synapse-chat-message-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.synapse-chat-message-images img {
+    max-width: 200px;
+    max-height: 200px;
+    border-radius: var(--synapse-chat-radius-sm);
+    object-fit: cover;
+    border: 1px solid var(--synapse-chat-border);
+    cursor: pointer;
+}

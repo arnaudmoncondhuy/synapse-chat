@@ -11,6 +11,8 @@ export default class extends Controller {
         // Zone Chat Principal
         'messages', 'input', 'submitBtn', 'greeting',
         'tonePicker', 'toneTrigger', 'toneMenu', 'currentToneEmoji', 'currentToneName', 'toneInput',
+        // Vision
+        'attachBtn', 'fileInput', 'imagePreview',
         // Zone Sidebar
         'sidebar', 'sidebarOverlay', 'conversationsList', 'conversationsEmpty',
         // Onglets et mémoire
@@ -31,7 +33,8 @@ export default class extends Controller {
         conversationsUrl: String,
         debugUrlTemplate: String,
         currentConversationId: String,
-        debug: { type: Boolean, default: false }
+        debug: { type: Boolean, default: false },
+        supportsVision: { type: Boolean, default: false }
     };
 
     connect() {
@@ -61,6 +64,9 @@ export default class extends Controller {
 
         // Charger le ton persistant
         this.loadPersistentTone();
+
+        // Vision : tableau des images en attente d'envoi
+        this.pendingImages = [];
     }
 
     disconnect() {
@@ -297,19 +303,22 @@ export default class extends Controller {
         if (event) event.preventDefault();
 
         const message = this.inputTarget.value.trim();
-        if (!message) return;
+        const hasImages = this.pendingImages.length > 0;
+        if (!message && !hasImages) return;
 
         // Passage du mode Accueil (Welcome) au mode Chat Actif
         this.element.classList.remove('synapse-chat-mode-welcome');
         this.element.classList.add('synapse-chat-mode-active');
         if (this.hasGreetingTarget) this.greetingTarget.classList.add('synapse-hidden');
 
-        // Ajouter message utilisateur
-        this.addMessage(message, 'user');
+        // Ajouter message utilisateur (avec preview images éventuelles)
+        const imagesToSend = [...this.pendingImages];
+        this.addMessage(message, 'user', { images: imagesToSend });
 
-        // Reset l'input
+        // Reset l'input et les images
         this.inputTarget.value = '';
         this.inputTarget.style.height = 'auto';
+        this.clearPendingImages();
         this.setLoading(true);
         this.pendingMemoryProposal = null;
 
@@ -325,6 +334,9 @@ export default class extends Controller {
                 options: { tone: tone },
                 debug: this.isDebugMode
             };
+            if (imagesToSend.length > 0) {
+                payload.images = imagesToSend.map(img => ({ mime_type: img.mime_type, data: img.data }));
+            }
 
             const response = await fetch(this.chatUrlValue || '/synapse/api/chat', {
                 method: 'POST',
@@ -461,6 +473,73 @@ export default class extends Controller {
         }
     }
 
+    /* ── VISION : Gestion des images attachées ──────────────────────────── */
+
+    attachImage() {
+        if (this.hasFileInputTarget) {
+            this.fileInputTarget.click();
+        }
+    }
+
+    async handleFileInput() {
+        if (!this.hasFileInputTarget) return;
+        const files = Array.from(this.fileInputTarget.files);
+        this.fileInputTarget.value = ''; // Reset pour permettre de re-sélectionner le même fichier
+
+        for (const file of files) {
+            if (!file.type.startsWith('image/')) continue;
+            const data = await this.fileToBase64(file);
+            this.pendingImages.push({ mime_type: file.type, data, name: file.name });
+        }
+        this.renderImagePreview();
+    }
+
+    fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                // Extraire uniquement la partie base64 (après la virgule)
+                const result = reader.result;
+                resolve(typeof result === 'string' ? result.split(',')[1] : '');
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    renderImagePreview() {
+        if (!this.hasImagePreviewTarget) return;
+        const container = this.imagePreviewTarget;
+
+        if (this.pendingImages.length === 0) {
+            container.classList.add('synapse-hidden');
+            container.innerHTML = '';
+            return;
+        }
+
+        container.classList.remove('synapse-hidden');
+        container.innerHTML = this.pendingImages.map((img, index) => `
+            <div class="synapse-chat-image-preview__item">
+                <img src="data:${img.mime_type};base64,${img.data}" alt="${img.name}">
+                <button type="button" class="synapse-chat-image-preview__remove"
+                    data-action="click->${this.identifier}#removeImage"
+                    data-index="${index}"
+                    aria-label="Supprimer">×</button>
+            </div>
+        `).join('');
+    }
+
+    removeImage(event) {
+        const index = parseInt(event.currentTarget.dataset.index, 10);
+        this.pendingImages.splice(index, 1);
+        this.renderImagePreview();
+    }
+
+    clearPendingImages() {
+        this.pendingImages = [];
+        this.renderImagePreview();
+    }
+
     addMessage(text, role, metadata = {}) {
         const formattedText = this.parseMarkdown(text);
         const debugId = metadata?.debug_id || null;
@@ -495,11 +574,17 @@ export default class extends Controller {
                 `;
             }
 
+            let imagePreviewHtml = '';
+            if (role === 'user' && metadata?.images?.length > 0) {
+                imagePreviewHtml = '<div class="synapse-chat-message-images">' +
+                    metadata.images.map(img => `<img src="data:${img.mime_type};base64,${img.data}" alt="Image attachée">`).join('') +
+                    '</div>';
+            }
             html = `
                 <div class="synapse-chat-message synapse-chat-message--${role}">
                     ${avatarContent}
                     <div class="synapse-chat-message__content">
-                        <div class="synapse-chat-bubble">${formattedText}</div>
+                        <div class="synapse-chat-bubble">${imagePreviewHtml}${formattedText}</div>
                         ${debugButton}
                     </div>
                 </div>
