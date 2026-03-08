@@ -46,7 +46,7 @@ class ChatUiController extends AbstractController
         if (!empty($currentConversationId) && $this->conversationManager) {
             $conversation = $this->conversationManager->getConversation($currentConversationId, $owner);
             if ($conversation) {
-                $history = $this->conversationManager->getHistoryArray($conversation);
+                $history = $this->conversationManager->getHistoryArray($conversation, true);
             }
         }
 

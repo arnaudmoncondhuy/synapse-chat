@@ -169,13 +169,11 @@
                         
                         <div class="synapse-chat-message__content">
                             <div class="synapse-chat-bubble">
-                                {# Afficher les images depuis metadata.parts si présentes #}
-                                {% if not is_ai and metadata.parts is defined %}
+                                {# Afficher les images depuis les pièces jointes #}
+                                {% if not is_ai and msg.attachments is defined and msg.attachments is not empty %}
                                     <div class="synapse-chat-message-images">
-                                        {% for part in metadata.parts %}
-                                            {% if part.type is defined and part.type == 'image_url' and part.image_url.url is defined %}
-                                                <img src="{{ part.image_url.url }}" alt="Image attachée">
-                                            {% endif %}
+                                        {% for att in msg.attachments %}
+                                            <img src="{{ path('synapse_attachment_serve', {uuid: att.uuid}) }}" alt="Image attachée">
                                         {% endfor %}
                                     </div>
                                 {% endif %}
