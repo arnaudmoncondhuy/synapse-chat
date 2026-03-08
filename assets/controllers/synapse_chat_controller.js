@@ -10,6 +10,7 @@ export default class extends Controller {
     static targets = [
         // Zone Chat Principal
         'messages', 'input', 'submitBtn', 'greeting',
+        'agentPicker', 'agentTrigger', 'agentMenu', 'currentAgentEmoji', 'currentAgentName', 'agentInput',
         'tonePicker', 'toneTrigger', 'toneMenu', 'currentToneEmoji', 'currentToneName', 'toneInput',
         // Vision
         'attachBtn', 'fileInput', 'imagePreview',
@@ -49,8 +50,8 @@ export default class extends Controller {
             this.inputTarget.addEventListener('input', this.onInput);
         }
 
-        // Écouteur pour fermer le menu des tons si on clique ailleurs
-        this.onClickOutside = this.closeToneMenuOutside.bind(this);
+        // Écouteur pour fermer les menus (ton, agent) si on clique ailleurs
+        this.onClickOutside = (e) => { this.closeToneMenuOutside(e); this.closeAgentMenuOutside(e); };
         document.addEventListener('click', this.onClickOutside);
 
         const urlParams = new URLSearchParams(window.location.search);
@@ -323,6 +324,7 @@ export default class extends Controller {
         this.pendingMemoryProposal = null;
 
         const tone = this.hasToneInputTarget ? this.toneInputTarget.value : null;
+        const agent = this.hasAgentInputTarget ? this.agentInputTarget.value : null;
         const csrfToken = await this.ensureCsrfToken();
         const headers = { 'Content-Type': 'application/json' };
         if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
@@ -331,7 +333,7 @@ export default class extends Controller {
             const payload = {
                 message: message,
                 conversation_id: this.currentConversationIdValue,
-                options: { tone: tone },
+                options: { tone: tone, ...(agent ? { agent: agent } : {}) },
                 debug: this.isDebugMode
             };
             if (imagesToSend.length > 0) {
@@ -940,6 +942,41 @@ export default class extends Controller {
                 }
             } catch (e) {
                 console.error('Erreur lors du chargement du ton persistant', e);
+            }
+        }
+    }
+
+    /* ── 4.6. SÉLECTEUR D'AGENTS ────────────────────────────────────────────── */
+
+    toggleAgentMenu(event) {
+        if (event) event.stopPropagation();
+        if (this.hasAgentMenuTarget) {
+            this.agentMenuTarget.classList.toggle('synapse-hidden');
+            this.agentTriggerTarget.classList.toggle('is-open');
+        }
+    }
+
+    selectAgent(event) {
+        const { agentKey, agentName, agentEmoji } = event.currentTarget.dataset;
+
+        if (this.hasCurrentAgentEmojiTarget) this.currentAgentEmojiTarget.textContent = agentEmoji;
+        if (this.hasCurrentAgentNameTarget) this.currentAgentNameTarget.textContent = agentName;
+        if (this.hasAgentInputTarget) this.agentInputTarget.value = agentKey;
+
+        if (this.hasAgentMenuTarget) {
+            this.agentMenuTarget.querySelectorAll('.synapse-chat-tone-option').forEach(opt => {
+                opt.classList.toggle('active', opt.dataset.agentKey === agentKey);
+            });
+        }
+
+        this.toggleAgentMenu();
+    }
+
+    closeAgentMenuOutside(event) {
+        if (!this.hasAgentPickerTarget) return;
+        if (!this.agentPickerTarget.contains(event.target)) {
+            if (this.hasAgentMenuTarget && !this.agentMenuTarget.classList.contains('synapse-hidden')) {
+                this.toggleAgentMenu();
             }
         }
     }

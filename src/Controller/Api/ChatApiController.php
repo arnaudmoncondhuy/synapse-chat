@@ -228,6 +228,9 @@ class ChatApiController extends AbstractController
                 if (isset($options['tone']) && is_string($options['tone'])) {
                     $typedOptions['tone'] = $options['tone'];
                 }
+                if (isset($options['agent']) && is_string($options['agent']) && '' !== $options['agent']) {
+                    $typedOptions['agent'] = $options['agent'];
+                }
                 if (isset($options['history']) && is_array($options['history'])) {
                     /** @var array<int, array<string, mixed>> $history */
                     $history = $options['history'];

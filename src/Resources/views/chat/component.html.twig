@@ -213,6 +213,38 @@
                                 </button>
                                 <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="synapse-hidden" data-{{ controller_override }}-target="fileInput" data-action="change->{{ controller_override }}#handleFileInput">
                             {% endif %}
+                            {% set agents = synapse_get_agents() %}
+                            {% if agents is not empty %}
+                                <div class="synapse-chat-tone-picker" data-{{ controller_override }}-target="agentPicker">
+                                    <button type="button" class="synapse-chat-tone-trigger" data-action="click->{{ controller_override }}#toggleAgentMenu" data-{{ controller_override }}-target="agentTrigger" aria-label="Choisir un agent">
+                                        <span class="synapse-chat-tone-trigger__emoji" data-{{ controller_override }}-target="currentAgentEmoji">🤖</span>
+                                        <span class="synapse-chat-tone-trigger__name" data-{{ controller_override }}-target="currentAgentName">Agent</span>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                    </button>
+
+                                    <div class="synapse-chat-tone-menu synapse-hidden" data-{{ controller_override }}-target="agentMenu">
+                                        <div class="synapse-chat-tone-menu__notice">
+                                            L'agent définit le rôle, le contexte et les outils disponibles pour cette conversation.
+                                        </div>
+                                        <div class="synapse-chat-tone-option active" data-action="click->{{ controller_override }}#selectAgent" data-agent-key="" data-agent-name="Agent" data-agent-emoji="🤖">
+                                            <span class="synapse-chat-tone-option__emoji">🤖</span>
+                                            <div class="synapse-chat-tone-option__info">
+                                                <div class="synapse-chat-tone-option__name">Aucun agent (Par défaut)</div>
+                                            </div>
+                                        </div>
+                                        {% for a in agents %}
+                                            <div class="synapse-chat-tone-option" data-action="click->{{ controller_override }}#selectAgent" data-agent-key="{{ a.key }}" data-agent-name="{{ a.name }}" data-agent-emoji="{{ a.emoji }}">
+                                                <span class="synapse-chat-tone-option__emoji">{{ a.emoji }}</span>
+                                                <div class="synapse-chat-tone-option__info">
+                                                    <div class="synapse-chat-tone-option__name">{{ a.name }}</div>
+                                                    <div class="synapse-chat-tone-option__desc">{{ a.description }}</div>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                    <input type="hidden" name="agent" value="" data-{{ controller_override }}-target="agentInput">
+                                </div>
+                            {% endif %}
                             {% set tones = synapse_get_tones() %}
                             {% if tones is not empty %}
                                 <div class="synapse-chat-tone-picker" data-{{ controller_override }}-target="tonePicker">
@@ -221,7 +253,7 @@
                                         <span class="synapse-chat-tone-trigger__name" data-{{ controller_override }}-target="currentToneName">Personnalité</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                                     </button>
-                                    
+
                                     <div class="synapse-chat-tone-menu synapse-hidden" data-{{ controller_override }}-target="toneMenu">
                                         <div class="synapse-chat-tone-menu__notice">
                                             Le ton modifie uniquement le style de la réponse, pas la capacité de réflexion de l'IA.
