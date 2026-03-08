@@ -26,7 +26,7 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
     public function prepend(ContainerBuilder $container): void
     {
         // Enregistrement du namespace Twig @Synapse
-        $viewsPath = \dirname(__DIR__) . '/Resources/views';
+        $viewsPath = \dirname(__DIR__).'/Resources/views';
 
         $container->prependExtensionConfig('twig', [
             'paths' => [
@@ -36,7 +36,7 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
 
         // Enregistrement des assets chat dans AssetMapper.
         // Utilisation d'un chemin robuste remontant à la racine du bundle.
-        $assetsDir = \dirname(__DIR__, 1) . '/../assets';
+        $assetsDir = \dirname(__DIR__, 1).'/../assets';
         if ($container->hasExtension('framework') && is_dir($assetsDir)) {
             $container->prependExtensionConfig('framework', [
                 'asset_mapper' => [
@@ -53,11 +53,11 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
      */
     public function load(array $configs, ContainerBuilder $container): void
     {
-        $configDir = \dirname(__DIR__, 1) . '/../config';
+        $configDir = \dirname(__DIR__, 1).'/../config';
         $loader = new YamlFileLoader($container, new FileLocator($configDir));
 
         // Charger la config du chat (toujours, le fichier existe dans le bundle)
-        if (is_file($configDir . '/chat.yaml')) {
+        if (is_file($configDir.'/chat.yaml')) {
             $loader->load('chat.yaml');
         }
 

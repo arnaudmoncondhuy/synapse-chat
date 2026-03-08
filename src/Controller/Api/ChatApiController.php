@@ -39,7 +39,8 @@ class ChatApiController extends AbstractController
         private ?CsrfTokenManagerInterface $csrfTokenManager = null,
         private ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenAccountingService $tokenAccountingService = null,
         private ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenCostEstimator $tokenCostEstimator = null,
-    ) {}
+    ) {
+    }
 
     /**
      * Traite une nouvelle requête de chat et retourne un flux d'événements.
@@ -51,7 +52,7 @@ class ChatApiController extends AbstractController
      * 1. Désactivation du Symfony Profiler pour éviter la pollution du JSON.
      * 2. Clôture immédiate de la session (session_write_close) pour éviter le verrouillage (Session Blocking) si d'autres parties de l'application utilisent les sessions PHP.
      *
-     * @param Request       $request  la requête HTTP contenant le message JSON
+     * @param Request $request la requête HTTP contenant le message JSON
      * @param Profiler|null $profiler le profiler Symfony (injecté si disponible)
      *
      * @return StreamedResponse une réponse HTTP dont le contenu est envoyé chunk par chunk
@@ -129,7 +130,7 @@ class ChatApiController extends AbstractController
 
             // Helper to send NDJSON event
             $sendEvent = function (string $type, mixed $payload): void {
-                echo json_encode(['type' => $type, 'payload' => $payload], JSON_INVALID_UTF8_IGNORE | JSON_THROW_ON_ERROR) . "\n";
+                echo json_encode(['type' => $type, 'payload' => $payload], JSON_INVALID_UTF8_IGNORE | JSON_THROW_ON_ERROR)."\n";
                 // Force flush explicitly
                 if (ob_get_length() > 0) {
                     ob_flush();
@@ -138,7 +139,7 @@ class ChatApiController extends AbstractController
             };
 
             // Send padding to bypass browser/proxy buffering (approx 2KB)
-            echo ':' . str_repeat(' ', 2048) . "\n";
+            echo ':'.str_repeat(' ', 2048)."\n";
             flush();
 
             $isReset = isset($options['reset_conversation']) && true === $options['reset_conversation'];
@@ -382,7 +383,7 @@ class ChatApiController extends AbstractController
                 } elseif ($e instanceof LlmServiceUnavailableException) {
                     $errorMessage = '🔧 Service indisponible : Le service IA est temporairement inaccessible.';
                 } elseif ($e instanceof LlmException) {
-                    $errorMessage = '🤖 Erreur IA : ' . $e->getMessage();
+                    $errorMessage = '🤖 Erreur IA : '.$e->getMessage();
                 } elseif (str_contains($errorMessage, 'timeout') || str_contains($errorMessage, 'Timeout')) {
                     $errorMessage = "⏱️ Timeout : L'IA a mis trop de temps à répondre.";
                 } else {

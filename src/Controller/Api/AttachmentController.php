@@ -19,7 +19,8 @@ class AttachmentController extends AbstractController
         private SynapseMessageAttachmentRepository $attachmentRepository,
         private AttachmentStorageService $attachmentStorage,
         private PermissionCheckerInterface $permissionChecker,
-    ) {}
+    ) {
+    }
 
     public function __invoke(string $uuid): Response
     {
