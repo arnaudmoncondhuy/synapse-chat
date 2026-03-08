@@ -169,6 +169,16 @@
                         
                         <div class="synapse-chat-message__content">
                             <div class="synapse-chat-bubble">
+                                {# Afficher les images depuis metadata.parts si présentes #}
+                                {% if not is_ai and metadata.parts is defined %}
+                                    <div class="synapse-chat-message-images">
+                                        {% for part in metadata.parts %}
+                                            {% if part.type is defined and part.type == 'image_url' and part.image_url.url is defined %}
+                                                <img src="{{ part.image_url.url }}" alt="Image attachée">
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
                                 {% set displayContent = msg.decryptedContent is defined ? msg.decryptedContent : (msg.content is defined ? msg.content : '') %}
                                 {{ displayContent|synapse_markdown }}
                             </div>

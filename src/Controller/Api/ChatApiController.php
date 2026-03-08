@@ -258,8 +258,22 @@ class ChatApiController extends AbstractController
                 // Save BOTH user message and assistant response to database after processing
                 if ($conversation && $this->conversationManager) {
                     // Save user message (pas d'appel LLM associé)
-                    if ('' !== $message) {
-                        $this->conversationManager->saveMessage($conversation, MessageRole::USER, $message);
+                    if ('' !== $message || !empty($images)) {
+                        $userMetadata = [];
+                        if (!empty($images)) {
+                            $parts = [];
+                            if ('' !== $message) {
+                                $parts[] = ['type' => 'text', 'text' => $message];
+                            }
+                            foreach ($images as $img) {
+                                $parts[] = [
+                                    'type' => 'image_url',
+                                    'image_url' => ['url' => 'data:' . $img['mime_type'] . ';base64,' . $img['data']],
+                                ];
+                            }
+                            $userMetadata['parts'] = $parts;
+                        }
+                        $this->conversationManager->saveMessage($conversation, MessageRole::USER, $message ?: '[image]', $userMetadata);
                     }
 
                     if (!empty($result['answer'])) {
