@@ -26,6 +26,14 @@ Envoyez le header `X-CSRF-Token` (ou le champ `_csrf_token` dans le body) sur ch
 
 Les vues et contrôleurs Stimulus du bundle permettent d’afficher un chat avec streaming. Référez-vous à la configuration des routes et des templates dans votre projet pour intégrer le composant (sidebar ou page dédiée).
 
+## Personnalisation & Internationalisation
+
+Le bundle Chat est entièrement internationalisé. Tous les textes (boutons, placeholders, tooltips) utilisent le domaine de traduction `synapse_chat`. Vous pouvez personnaliser ces textes en surchargeant les fichiers YAML dans votre dossier `translations/`.
+
+Exemple de clés : `synapse.chat.input_area.placeholder`, `synapse.chat.sidebar.tab.conversations`.
+
+---
+
 ## Dépendance
 
 Synapse Chat dépend de **Synapse Core** : la configuration des modèles, presets, outils et de la persistance se fait via Core (et éventuellement **Synapse Admin** pour l’interface d’administration).

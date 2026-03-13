@@ -11,6 +11,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * API REST pour la gestion des conversations.
@@ -20,6 +21,7 @@ class ConversationApiController extends AbstractController
 {
     public function __construct(
         private ConversationManager $conversationManager,
+        private ?TranslatorInterface $translator = null,
     ) {
     }
 
@@ -92,7 +94,8 @@ class ConversationApiController extends AbstractController
         $title = is_string($titleRaw) ? $titleRaw : '';
 
         if ('' === $title) {
-            return new JsonResponse(['error' => 'Title is required'], Response::HTTP_BAD_REQUEST);
+            $msg = $this->translator ? $this->translator->trans('synapse.chat.api.error.title_required', [], 'synapse_chat') : 'Title is required';
+            return new JsonResponse(['error' => $msg], Response::HTTP_BAD_REQUEST);
         }
 
         try {

@@ -20,6 +20,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Profiler\Profiler;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Contracts\Translation\TranslatorInterface;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
 /**
@@ -39,6 +40,7 @@ class ChatApiController extends AbstractController
         private ?CsrfTokenManagerInterface $csrfTokenManager = null,
         private ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenAccountingService $tokenAccountingService = null,
         private ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenCostEstimator $tokenCostEstimator = null,
+        private ?TranslatorInterface $translator = null,
     ) {
     }
 
@@ -65,16 +67,19 @@ class ChatApiController extends AbstractController
             $token = $request->headers->get('X-CSRF-Token') ?? $request->request->get('_csrf_token');
             $token = (string) $token;
             if ('' === $token) {
-                throw $this->createAccessDeniedException('Jeton CSRF manquant. Le front doit envoyer X-CSRF-Token (récupéré via GET %synapse.chat_api_prefix%/csrf-token). Sinon : synapse.security.api_csrf_enabled: false dans config.');
+                $msg = $this->translator ? $this->translator->trans('synapse.chat.api.error.csrf_missing', [], 'synapse_chat') : 'Jeton CSRF manquant.';
+                throw $this->createAccessDeniedException($msg);
             }
             if (!$this->isCsrfTokenValid('synapse_api', $token)) {
-                throw $this->createAccessDeniedException('Jeton CSRF invalide ou expiré. Rechargez la page (F5).');
+                $msg = $this->translator ? $this->translator->trans('synapse.chat.api.error.csrf_invalid', [], 'synapse_chat') : 'Jeton CSRF invalide ou expiré.';
+                throw $this->createAccessDeniedException($msg);
             }
         }
 
         // Permission check: Can start/continue chat?
         if (!$this->permissionChecker->canCreateConversation()) {
-            throw $this->createAccessDeniedException('Not allowed to start a conversation.');
+            $msg = $this->translator ? $this->translator->trans('synapse.chat.api.error.permission_denied', [], 'synapse_chat') : 'Not allowed to start a conversation.';
+            throw $this->createAccessDeniedException($msg);
         }
 
         // 1. On désactive le profiler pour ne pas casser le flux JSON
@@ -113,7 +118,8 @@ class ChatApiController extends AbstractController
                 $conversation = $this->conversationManager->getConversation($conversationId, $user);
                 if ($conversation) {
                     if (!$this->permissionChecker->canView($conversation)) {
-                        throw $this->createAccessDeniedException('Access Denied to this conversation.');
+                        $msg = $this->translator ? $this->translator->trans('synapse.chat.api.error.conversation_access_denied', [], 'synapse_chat') : 'Access Denied to this conversation.';
+                        throw $this->createAccessDeniedException($msg);
                     }
                     $this->conversationManager->setCurrentConversation($conversation);
                 }
@@ -144,7 +150,8 @@ class ChatApiController extends AbstractController
 
             $isReset = isset($options['reset_conversation']) && true === $options['reset_conversation'];
             if (empty($message) && !$isReset) {
-                $sendEvent('error', 'SynapseMessage is required.');
+                $msg = $this->translator ? $this->translator->trans('synapse.chat.api.error.message_required', [], 'synapse_chat') : 'SynapseMessage is required.';
+                $sendEvent('error', $msg);
 
                 return;
             }
@@ -331,7 +338,9 @@ class ChatApiController extends AbstractController
 
                         // Check if this is the first exchange (exactly 2 messages: 1 user + 1 model)
                         if (2 === count($messages)) {
-                            $titlePrompt = "Génère un titre très court (max 6 mots) sans guillemets pour : '$message'";
+                            $titlePrompt = $this->translator 
+                                ? $this->translator->trans('synapse.chat.api.title_generation_prompt', ['%message%' => $message], 'synapse_chat')
+                                : "Génère un titre très court (max 6 mots) sans guillemets pour : '$message'";
 
                             // Generate title in stateless mode (don't pollute conversation history)
                             $titleResult = $this->chatService->ask($titlePrompt, ['stateless' => true, 'debug' => false]);
@@ -378,24 +387,24 @@ class ChatApiController extends AbstractController
 
                 // Enrich error message for common failures
                 if ($e instanceof LlmAuthenticationException) {
-                    $errorMessage = "🔑 Erreur d'authentification : Les identifiants de l'IA sont incorrects ou expirés.";
+                    $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.llm_auth', [], 'synapse_chat') : "🔑 Erreur d'authentification : Les identifiants de l'IA sont incorrects ou expirés.";
                 } elseif ($e instanceof LlmQuotaException) {
-                    $errorMessage = "⚠️ Quota dépassé : La limite de consommation de l'IA a été atteinte.";
+                    $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.llm_quota', [], 'synapse_chat') : "⚠️ Quota dépassé : La limite de consommation de l'IA a été atteinte.";
                 } elseif ($e instanceof LlmRateLimitException) {
-                    $errorMessage = '⏳ Trop de requêtes : Veuillez patienter un instant avant de réessayer.';
+                    $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.llm_rate_limit', [], 'synapse_chat') : '⏳ Trop de requêtes : Veuillez patienter un instant avant de réessayer.';
                 } elseif ($e instanceof LlmServiceUnavailableException) {
-                    $errorMessage = '🔧 Service indisponible : Le service IA est temporairement inaccessible.';
+                    $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.llm_unavailable', [], 'synapse_chat') : '🔧 Service indisponible : Le service IA est temporairement inaccessible.';
                 } elseif ($e instanceof LlmException) {
-                    $errorMessage = '🤖 Erreur IA : '.$e->getMessage();
-                } elseif (str_contains($errorMessage, 'timeout') || str_contains($errorMessage, 'Timeout')) {
-                    $errorMessage = "⏱️ Timeout : L'IA a mis trop de temps à répondre.";
+                    $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.llm_generic', ['%error%' => $e->getMessage()], 'synapse_chat') : '🤖 Erreur IA : '.$e->getMessage();
+                } elseif (str_contains((string) $errorMessage, 'timeout') || str_contains((string) $errorMessage, 'Timeout')) {
+                    $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.timeout', [], 'synapse_chat') : "⏱️ Timeout : L'IA a mis trop de temps à répondre.";
                 } else {
                     // En dev : afficher la vraie erreur + fichier:ligne pour cibler le coupable
                     if ($this->getParameter('kernel.debug')) {
                         $file = basename($e->getFile());
                         $errorMessage = sprintf('❌ %s (%s:%d)', $errorMessage, $file, $e->getLine());
                     } else {
-                        $errorMessage = '❌ Erreur système : Une erreur inattendue est survenue.';
+                        $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.system', [], 'synapse_chat') : '❌ Erreur système : Une erreur inattendue est survenue.';
                     }
                 }
 

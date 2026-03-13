@@ -46,6 +46,17 @@ class SynapseChatExtension extends Extension implements PrependExtensionInterfac
                 ],
             ]);
         }
+
+        // Enregistrement des traductions chat.
+        if ($container->hasExtension('framework')) {
+            $container->prependExtensionConfig('framework', [
+                'translator' => [
+                    'paths' => [
+                        \dirname(__DIR__, 2).'/translations',
+                    ],
+                ],
+            ]);
+        }
     }
 
     /**

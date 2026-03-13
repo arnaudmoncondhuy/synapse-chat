@@ -186,9 +186,15 @@ synapse-chat
   └── symfony/asset
 ```
 
-## Licence
+## Internationalisation
 
-PolyForm Noncommercial 1.0.0 (usage non-commercial uniquement)
+L'interface de chat et les messages d'erreur API sont traduisibles.
+- **Domaine de traduction** : `synapse_chat`
+- **Composants traduits** : Interface Twig, contrôleurs API, prompts internes.
+
+---
+
+## Licence
 
 ## Support
 

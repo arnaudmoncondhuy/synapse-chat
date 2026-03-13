@@ -67,14 +67,14 @@
             <div class="synapse-chat-tabs">
                 <button class="synapse-chat-tab active" data-{{ controller_override }}-target="tabConversations" data-action="click->{{ controller_override }}#showConversationsTab">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                    Discussions
+                    {{ 'synapse.chat.sidebar.tab.conversations'|trans(domain='synapse_chat') }}
                 </button>
                 <button class="synapse-chat-tab" data-{{ controller_override }}-target="tabMemory" data-action="click->{{ controller_override }}#showMemoryTab">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg>
-                    Mémoire
+                    {{ 'synapse.chat.sidebar.tab.memory'|trans(domain='synapse_chat') }}
                 </button>
             </div>
-            <button class="synapse-chat-sidebar__close synapse-btn-small" data-action="click->{{ controller_override }}#closeSidebar" aria-label="Fermer le menu">
+            <button class="synapse-chat-sidebar__close synapse-btn-small" data-action="click->{{ controller_override }}#closeSidebar" aria-label="{{ 'synapse.chat.sidebar.action.close'|trans(domain='synapse_chat') }}">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
         </div>
@@ -84,11 +84,11 @@
             <div class="synapse-chat-tab-panel active" data-{{ controller_override }}-target="panelConversations">
                 <div class="synapse-chat-sidebar__list" data-{{ controller_override }}-target="conversationsList">
                     {# Liste injectée dynamiquement par le JS #}
-                    <div class="synapse-chat-sidebar__loading">Chargement...</div>
+                    <div class="synapse-chat-sidebar__loading">{{ 'synapse.chat.sidebar.status.loading'|trans(domain='synapse_chat') }}</div>
                 </div>
                 
                 <div class="synapse-chat-sidebar__empty synapse-hidden" data-{{ controller_override }}-target="conversationsEmpty">
-                    <p>Aucune conversation</p>
+                    <p>{{ 'synapse.chat.sidebar.conversations.empty'|trans(domain='synapse_chat') }}</p>
                 </div>
             </div>
 
@@ -96,8 +96,8 @@
             <div class="synapse-chat-tab-panel synapse-hidden" data-{{ controller_override }}-target="panelMemory">
                 <form class="synapse-memory-add-form" data-action="submit->{{ controller_override }}#addMemory">
                     <div class="synapse-memory-input-wrapper">
-                        <input type="text" data-{{ controller_override }}-target="memoryInput" placeholder="Nouveau fait à retenir..." class="synapse-memory-input" required>
-                        <button type="submit" class="synapse-memory-submit" title="Ajouter à la mémoire">
+                        <input type="text" data-{{ controller_override }}-target="memoryInput" placeholder="{{ 'synapse.chat.sidebar.memory.input_placeholder'|trans(domain='synapse_chat') }}" class="synapse-memory-input" required>
+                        <button type="submit" class="synapse-memory-submit" title="{{ 'synapse.chat.sidebar.memory.add_title'|trans(domain='synapse_chat') }}">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                         </button>
                     </div>
@@ -109,7 +109,7 @@
                 </div>
 
                 <div class="synapse-chat-sidebar__empty synapse-hidden" data-{{ controller_override }}-target="memoryEmpty">
-                    <p>Aucun souvenir retenu</p>
+                    <p>{{ 'synapse.chat.sidebar.memory.empty'|trans(domain='synapse_chat') }}</p>
                 </div>
             </div>
         </div>
@@ -118,7 +118,7 @@
         <div class="synapse-chat-sidebar__footer">
             <button class="synapse-chat-btn synapse-chat-btn--primary synapse-chat-btn--full" data-action="click->{{ controller_override }}#newConversation">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                Nouvelle conversation
+                {{ 'synapse.chat.sidebar.action.new'|trans(domain='synapse_chat') }}
             </button>
         </div>
         {% endif %}
@@ -129,7 +129,7 @@
         
         {# Header Mobile (Visible uniquement sur petits écrans) #}
         <header class="synapse-chat-main__header">
-            <button class="synapse-chat-btn synapse-chat-btn--icon synapse-chat-sidebar-toggle" data-action="click->{{ controller_override }}#toggleSidebar" aria-label="Ouvrir le menu">
+            <button class="synapse-chat-btn synapse-chat-btn--icon synapse-chat-sidebar-toggle" data-action="click->{{ controller_override }}#toggleSidebar" aria-label="{{ 'synapse.chat.sidebar.action.open'|trans(domain='synapse_chat') }}">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
             </button>
             <span class="synapse-chat-main__title">Synapse AI</span>
@@ -144,8 +144,8 @@
                     <div class="synapse-chat-greeting__avatar">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
                     </div>
-                    <h1 class="synapse-chat-greeting__title">Bonjour</h1>
-                    <p class="synapse-chat-greeting__subtitle">Comment puis-je vous aider aujourd'hui ?</p>
+                    <h1 class="synapse-chat-greeting__title">{{ 'synapse.chat.greeting.title'|trans(domain='synapse_chat') }}</h1>
+                    <p class="synapse-chat-greeting__subtitle">{{ 'synapse.chat.greeting.subtitle'|trans(domain='synapse_chat') }}</p>
                 {% endblock %}
             </div>
 
@@ -200,15 +200,15 @@
                     <textarea 
                         class="synapse-chat-textarea"
                         data-{{ controller_override }}-target="input" 
-                        placeholder="Posez votre question ou saisissez un prompt..." 
+                        placeholder="{{ 'synapse.chat.input_area.placeholder'|trans(domain='synapse_chat') }}" 
                         rows="1"
-                        aria-label="Message explicatif"></textarea>
+                        aria-label="{{ 'synapse.chat.input_area.label'|trans(domain='synapse_chat') }}"></textarea>
 
                     <div class="synapse-chat-toolbar">
                         <div class="synapse-chat-toolbar__left">
                             {# Bouton d'attache d'image (visible uniquement si le modèle supporte la vision) #}
                             {% if synapse_active_model_supports('vision') %}
-                                <button type="button" class="synapse-chat-btn-attach" data-action="click->{{ controller_override }}#attachImage" data-{{ controller_override }}-target="attachBtn" aria-label="Joindre une image" title="Joindre une image">
+                                <button type="button" class="synapse-chat-btn-attach" data-action="click->{{ controller_override }}#attachImage" data-{{ controller_override }}-target="attachBtn" aria-label="{{ 'synapse.chat.input_area.action.attach'|trans(domain='synapse_chat') }}" title="{{ 'synapse.chat.input_area.action.attach'|trans(domain='synapse_chat') }}">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                                 </button>
                                 <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple class="synapse-hidden" data-{{ controller_override }}-target="fileInput" data-action="change->{{ controller_override }}#handleFileInput">
@@ -216,20 +216,20 @@
                             {% set agents = synapse_get_agents() %}
                             {% if agents is not empty %}
                                 <div class="synapse-chat-tone-picker" data-{{ controller_override }}-target="agentPicker">
-                                    <button type="button" class="synapse-chat-tone-trigger" data-action="click->{{ controller_override }}#toggleAgentMenu" data-{{ controller_override }}-target="agentTrigger" aria-label="Choisir un agent">
+                                    <button type="button" class="synapse-chat-tone-trigger" data-action="click->{{ controller_override }}#toggleAgentMenu" data-{{ controller_override }}-target="agentTrigger" aria-label="{{ 'synapse.chat.input_area.agent.aria_label'|trans(domain='synapse_chat') }}">
                                         <span class="synapse-chat-tone-trigger__emoji" data-{{ controller_override }}-target="currentAgentEmoji">🤖</span>
-                                        <span class="synapse-chat-tone-trigger__name" data-{{ controller_override }}-target="currentAgentName">Agent</span>
+                                        <span class="synapse-chat-tone-trigger__name" data-{{ controller_override }}-target="currentAgentName">{{ 'synapse.chat.input_area.agent.label'|trans(domain='synapse_chat') }}</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                                     </button>
 
                                     <div class="synapse-chat-tone-menu synapse-hidden" data-{{ controller_override }}-target="agentMenu">
                                         <div class="synapse-chat-tone-menu__notice">
-                                            L'agent définit le rôle, le contexte et les outils disponibles pour cette conversation.
+                                            {{ 'synapse.chat.input_area.agent.notice'|trans(domain='synapse_chat') }}
                                         </div>
-                                        <div class="synapse-chat-tone-option active" data-action="click->{{ controller_override }}#selectAgent" data-agent-key="" data-agent-name="Agent" data-agent-emoji="🤖">
+                                        <div class="synapse-chat-tone-option active" data-action="click->{{ controller_override }}#selectAgent" data-agent-key="" data-agent-name="{{ 'synapse.chat.input_area.agent.label'|trans(domain='synapse_chat') }}" data-agent-emoji="🤖">
                                             <span class="synapse-chat-tone-option__emoji">🤖</span>
                                             <div class="synapse-chat-tone-option__info">
-                                                <div class="synapse-chat-tone-option__name">Aucun agent (Par défaut)</div>
+                                                <div class="synapse-chat-tone-option__name">{{ 'synapse.chat.input_area.agent.default'|trans(domain='synapse_chat') }}</div>
                                             </div>
                                         </div>
                                         {% for a in agents %}
@@ -248,20 +248,20 @@
                             {% set tones = synapse_get_tones() %}
                             {% if tones is not empty %}
                                 <div class="synapse-chat-tone-picker" data-{{ controller_override }}-target="tonePicker">
-                                    <button type="button" class="synapse-chat-tone-trigger" data-action="click->{{ controller_override }}#toggleToneMenu" data-{{ controller_override }}-target="toneTrigger" aria-label="Choisir une personnalité">
+                                    <button type="button" class="synapse-chat-tone-trigger" data-action="click->{{ controller_override }}#toggleToneMenu" data-{{ controller_override }}-target="toneTrigger" aria-label="{{ 'synapse.chat.input_area.tone.aria_label'|trans(domain='synapse_chat') }}">
                                         <span class="synapse-chat-tone-trigger__emoji" data-{{ controller_override }}-target="currentToneEmoji">✨</span>
-                                        <span class="synapse-chat-tone-trigger__name" data-{{ controller_override }}-target="currentToneName">Personnalité</span>
+                                        <span class="synapse-chat-tone-trigger__name" data-{{ controller_override }}-target="currentToneName">{{ 'synapse.chat.input_area.tone.label'|trans(domain='synapse_chat') }}</span>
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                                     </button>
 
                                     <div class="synapse-chat-tone-menu synapse-hidden" data-{{ controller_override }}-target="toneMenu">
                                         <div class="synapse-chat-tone-menu__notice">
-                                            Le ton modifie uniquement le style de la réponse, pas la capacité de réflexion de l'IA.
+                                            {{ 'synapse.chat.input_area.tone.notice'|trans(domain='synapse_chat') }}
                                         </div>
-                                        <div class="synapse-chat-tone-option active" data-action="click->{{ controller_override }}#selectTone" data-tone-key="" data-tone-name="Personnalité" data-tone-emoji="✨">
+                                        <div class="synapse-chat-tone-option active" data-action="click->{{ controller_override }}#selectTone" data-tone-key="" data-tone-name="{{ 'synapse.chat.input_area.tone.label'|trans(domain='synapse_chat') }}" data-tone-emoji="✨">
                                             <span class="synapse-chat-tone-option__emoji">✨</span>
                                             <div class="synapse-chat-tone-option__info">
-                                                <div class="synapse-chat-tone-option__name">Normal (Par défaut)</div>
+                                                <div class="synapse-chat-tone-option__name">{{ 'synapse.chat.input_area.tone.default'|trans(domain='synapse_chat') }}</div>
                                             </div>
                                         </div>
                                         {% for t in tones %}
@@ -280,7 +280,7 @@
                         </div>
 
                         <div class="synapse-chat-toolbar__right">
-                            <button type="submit" class="synapse-chat-btn-send" data-{{ controller_override }}-target="submitBtn" aria-label="Envoyer">
+                            <button type="submit" class="synapse-chat-btn-send" data-{{ controller_override }}-target="submitBtn" aria-label="{{ 'synapse.chat.input_area.action.send'|trans(domain='synapse_chat') }}">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                             </button>
                         </div>
@@ -288,7 +288,7 @@
                 </div>
                 
                 <div class="synapse-chat-disclaimer">
-                    L'IA peut générer des informations incorrectes. Vérifiez les faits importants.
+                    {{ 'synapse.chat.input_area.disclaimer'|trans(domain='synapse_chat') }}
                 </div>
             </form>
         </div>
