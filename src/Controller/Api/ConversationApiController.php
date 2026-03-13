@@ -95,6 +95,7 @@ class ConversationApiController extends AbstractController
 
         if ('' === $title) {
             $msg = $this->translator ? $this->translator->trans('synapse.chat.api.error.title_required', [], 'synapse_chat') : 'Title is required';
+
             return new JsonResponse(['error' => $msg], Response::HTTP_BAD_REQUEST);
         }
 

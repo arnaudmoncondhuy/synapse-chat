@@ -20,8 +20,8 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Profiler\Profiler;
 use Symfony\Component\Routing\Attribute\Route;
-use Symfony\Contracts\Translation\TranslatorInterface;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * Contrôleur API principal pour le flux de conversation.
@@ -338,7 +338,7 @@ class ChatApiController extends AbstractController
 
                         // Check if this is the first exchange (exactly 2 messages: 1 user + 1 model)
                         if (2 === count($messages)) {
-                            $titlePrompt = $this->translator 
+                            $titlePrompt = $this->translator
                                 ? $this->translator->trans('synapse.chat.api.title_generation_prompt', ['%message%' => $message], 'synapse_chat')
                                 : "Génère un titre très court (max 6 mots) sans guillemets pour : '$message'";
 
