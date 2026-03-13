@@ -36,7 +36,7 @@ class ConversationApiController extends AbstractController
             return new JsonResponse(['error' => 'User not authenticated'], Response::HTTP_UNAUTHORIZED);
         }
 
-        $limit = (int) $request->query->get('limit', 50);
+        $limit = max(1, min((int) $request->query->get('limit', 50), 500));
         $conversations = $this->conversationManager->getUserConversations($user, null, $limit);
 
         $data = array_map(fn ($conv) => [
@@ -87,11 +87,13 @@ class ConversationApiController extends AbstractController
             return new JsonResponse(['error' => 'User not authenticated'], Response::HTTP_UNAUTHORIZED);
         }
 
-        $rawJson = $request->getContent();
-        $decoded = json_decode(is_string($rawJson) ? $rawJson : '{}', true);
-        $data = is_array($decoded) ? $decoded : [];
+        try {
+            $data = json_decode($request->getContent() ?: '{}', true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            $data = [];
+        }
         $titleRaw = $data['title'] ?? '';
-        $title = is_string($titleRaw) ? $titleRaw : '';
+        $title = is_string($titleRaw) ? mb_substr(trim($titleRaw), 0, 255) : '';
 
         if ('' === $title) {
             $msg = $this->translator ? $this->translator->trans('synapse.chat.api.error.title_required', [], 'synapse_chat') : 'Title is required';

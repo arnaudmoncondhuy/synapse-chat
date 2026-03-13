@@ -8,10 +8,31 @@ Le bundle **Synapse Chat** (`arnaudmoncondhuy/synapse-chat`) fournit l’API HTT
 composer require arnaudmoncondhuy/synapse-core arnaudmoncondhuy/synapse-chat
 ```
 
-- **POST `/synapse/api/chat`** : envoi d’un message et réception de la réponse.
-- **POST `/synapse/api/estimate-cost`** : estimation du coût d'un message avant envoi.
-- **POST `/synapse/api/conversation/reset`** : réinitialisation de la conversation courante.
-- **Auto-titling** : Le bundle génère automatiquement un titre après le premier échange (événement `title` envoyé en NDJSON).
+## Endpoints API
+
+### Chat
+
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| POST | `/synapse/api/chat` | Envoi d’un message, réponse en streaming NDJSON. |
+| POST | `/synapse/api/estimate-cost` | Estimation du coût en tokens avant envoi. |
+| POST | `/synapse/api/conversation/reset` | Réinitialisation de la conversation courante. |
+| GET | `/synapse/api/csrf-token` | Récupérer le jeton CSRF (SPA, page surchargée). |
+
+**Auto-titling** : Le bundle génère automatiquement un titre après le premier échange (événement `title` envoyé en NDJSON).
+
+### Gestion des conversations
+
+Ces endpoints permettent de gérer l’historique des conversations de l’utilisateur authentifié.
+
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| GET | `/synapse/api/conversations` | Liste les conversations de l’utilisateur (`?limit=50`, max 500). |
+| DELETE | `/synapse/api/conversations/{id}` | Supprime (soft-delete) une conversation. |
+| PATCH | `/synapse/api/conversations/{id}/rename` | Renomme une conversation. Body : `{"title": "Nouveau nom"}`. |
+| GET | `/synapse/api/conversations/{id}/messages` | Récupère tous les messages d’une conversation. |
+
+Toutes ces routes nécessitent que l’utilisateur implémente `ConversationOwnerInterface`.
 
 ## Protection CSRF
 
