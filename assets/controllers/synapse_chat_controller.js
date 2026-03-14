@@ -66,6 +66,9 @@ export default class extends Controller {
         // Charger le ton persistant
         this.loadPersistentTone();
 
+        // Charger l'agent persistant
+        this.loadPersistentAgent();
+
         // Vision : tableau des images en attente d'envoi
         this.pendingImages = [];
     }
@@ -971,6 +974,9 @@ export default class extends Controller {
             });
         }
 
+        // Sauvegarde persistante
+        this.savePersistentAgent(agentKey, agentName, agentEmoji);
+
         this.toggleAgentMenu();
     }
 
@@ -979,6 +985,30 @@ export default class extends Controller {
         if (!this.agentPickerTarget.contains(event.target)) {
             if (this.hasAgentMenuTarget && !this.agentMenuTarget.classList.contains('synapse-hidden')) {
                 this.toggleAgentMenu();
+            }
+        }
+    }
+
+    savePersistentAgent(key, name, emoji) {
+        localStorage.setItem('synapse_chat_agent', JSON.stringify({ key, name, emoji }));
+    }
+
+    loadPersistentAgent() {
+        const saved = localStorage.getItem('synapse_chat_agent');
+        if (saved) {
+            try {
+                const { key, name, emoji } = JSON.parse(saved);
+                if (this.hasCurrentAgentEmojiTarget) this.currentAgentEmojiTarget.textContent = emoji;
+                if (this.hasCurrentAgentNameTarget) this.currentAgentNameTarget.textContent = name;
+                if (this.hasAgentInputTarget) this.agentInputTarget.value = key;
+
+                if (this.hasAgentMenuTarget) {
+                    this.agentMenuTarget.querySelectorAll('.synapse-chat-tone-option').forEach(opt => {
+                        opt.classList.toggle('active', opt.dataset.agentKey === key);
+                    });
+                }
+            } catch (e) {
+                console.error('Erreur lors du chargement de l\'agent persistant', e);
             }
         }
     }
