@@ -642,6 +642,8 @@ export default class extends Controller {
         window.open(url, '_blank');
     }
 
+
+
     /* ── 4. MÉMOIRE ET OUTILS ──────────────────────────────────────────────── */
 
     showMemoryProposal(proposal, conversationId) {
