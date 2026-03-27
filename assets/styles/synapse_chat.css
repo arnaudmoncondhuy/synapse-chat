@@ -130,9 +130,9 @@
     color: var(--synapse-chat-text);
 }
 
-.synapse-chat-sidebar__close {
+.synapse-chat-sidebar .synapse-chat-sidebar__close {
     display: none;
-    /* Visible unqiuement sur mobile */
+    /* Caché par défaut, visible via MQ */
     background: none;
     border: none;
     color: var(--synapse-chat-text-muted);
@@ -1084,8 +1084,8 @@
         pointer-events: auto;
     }
 
-    .synapse-chat-sidebar__close {
-        display: block;
+    .synapse-chat-sidebar .synapse-chat-sidebar__close {
+        display: flex;
     }
 
     .synapse-chat-input-area {
@@ -1130,8 +1130,8 @@
         pointer-events: auto;
     }
 
-    .synapse-chat-sidebar__close {
-        display: block;
+    .synapse-chat-sidebar .synapse-chat-sidebar__close {
+        display: flex;
     }
 
     .synapse-chat-greeting__title {
