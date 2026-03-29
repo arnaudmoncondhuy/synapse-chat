@@ -1006,7 +1006,7 @@
     cursor: pointer;
     transition: all 0.2s;
     font-family: inherit;
-    border: null;
+    border: none;
 }
 
 .synapse-chat-btn--primary {
@@ -1205,8 +1205,7 @@
     border-radius: var(--synapse-chat-radius-lg);
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
     z-index: 1000;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: auto hidden;
     animation: synapseFadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 

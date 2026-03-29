@@ -20,8 +20,8 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 class ConversationApiController extends AbstractController
 {
     public function __construct(
-        private ConversationManager $conversationManager,
-        private ?TranslatorInterface $translator = null,
+        private readonly ConversationManager $conversationManager,
+        private readonly ?TranslatorInterface $translator = null,
     ) {
     }
 

@@ -22,9 +22,9 @@ use Symfony\Component\Routing\Attribute\Route;
 class ChatUiController extends AbstractController
 {
     public function __construct(
-        private PermissionCheckerInterface $permissionChecker,
-        private \ArnaudMoncondhuy\SynapseCore\Contract\ConfigProviderInterface $configProvider,
-        private ?ConversationManager $conversationManager = null,
+        private readonly PermissionCheckerInterface $permissionChecker,
+        private readonly \ArnaudMoncondhuy\SynapseCore\Contract\ConfigProviderInterface $configProvider,
+        private readonly ?ConversationManager $conversationManager = null,
     ) {
     }
 
@@ -51,7 +51,7 @@ class ChatUiController extends AbstractController
         }
 
         $config = $this->configProvider->getConfig();
-        $debugMode = $config['debug_mode'] ?? false;
+        $debugMode = $config->debugMode;
 
         return $this->render('@Synapse/chat/page.html.twig', [
             'history' => $history,

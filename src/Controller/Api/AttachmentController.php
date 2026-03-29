@@ -16,9 +16,9 @@ use Symfony\Component\Routing\Attribute\Route;
 class AttachmentController extends AbstractController
 {
     public function __construct(
-        private SynapseMessageAttachmentRepository $attachmentRepository,
-        private AttachmentStorageService $attachmentStorage,
-        private PermissionCheckerInterface $permissionChecker,
+        private readonly SynapseMessageAttachmentRepository $attachmentRepository,
+        private readonly AttachmentStorageService $attachmentStorage,
+        private readonly PermissionCheckerInterface $permissionChecker,
     ) {
     }
 

@@ -19,9 +19,9 @@ use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 class ResetController extends AbstractController
 {
     public function __construct(
-        private ChatService $chatService,
-        private PermissionCheckerInterface $permissionChecker,
-        private ?CsrfTokenManagerInterface $csrfTokenManager = null,
+        private readonly ChatService $chatService,
+        private readonly PermissionCheckerInterface $permissionChecker,
+        private readonly ?CsrfTokenManagerInterface $csrfTokenManager = null,
     ) {
     }
 

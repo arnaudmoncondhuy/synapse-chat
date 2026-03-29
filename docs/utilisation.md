@@ -34,6 +34,21 @@ Ces endpoints permettent de gérer l’historique des conversations de l’utili
 
 Toutes ces routes nécessitent que l’utilisateur implémente `ConversationOwnerInterface`.
 
+### Mémoire Sémantique
+
+Le bundle propose des endpoints pour gérer la mémoire vectorielle de l’utilisateur (souvenirs, faits importants, etc.).
+
+| Méthode | Route | Description |
+|---------|-------|-------------|
+| POST | `/synapse/api/memory/confirm` | Confirmer une proposition de mémoire (lancée par le LLM via `ProposeMemoryTool`) |
+| POST | `/synapse/api/memory/reject` | Rejeter une proposition de mémoire |
+| GET | `/synapse/api/memory` | Lister les mémoires de l’utilisateur actif (`?limit=50`, max 500) |
+| POST | `/synapse/api/memory/manual` | Créer une mémoire manuellement (sans proposition du LLM) |
+| PATCH | `/synapse/api/memory/{id}` | Modifier le contenu d’une mémoire existante |
+| DELETE | `/synapse/api/memory/{id}` | Supprimer une mémoire |
+
+**Mémoire "Human-in-the-loop"** : Le LLM peut proposer des souvenirs via l’outil `ProposeMemoryTool`, mais seule l’utilisateur (ou le frontend) peut les confirmer ou les rejeter.
+
 ## Protection CSRF
 
 Le bundle applique une protection CSRF sur les requêtes POST/PUT/DELETE. Le jeton est exposé via :

@@ -329,6 +329,7 @@ body:has(.assistant-layout) main {
 @media(max-width: 768px) {
     .greeting-title {
         font-size: 24px;
+        justify-content: center;
     }
 
     .greeting-subtitle {
@@ -341,10 +342,6 @@ body:has(.assistant-layout) main {
 
     .assistant-empty-state {
         text-align: center;
-    }
-
-    .greeting-title {
-        justify-content: center;
     }
 }
 

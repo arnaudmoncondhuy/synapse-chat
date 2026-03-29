@@ -7,6 +7,9 @@ namespace ArnaudMoncondhuy\SynapseChat\Controller\Api;
 use ArnaudMoncondhuy\SynapseCore\Contract\ConversationOwnerInterface;
 use ArnaudMoncondhuy\SynapseCore\Contract\PermissionCheckerInterface;
 use ArnaudMoncondhuy\SynapseCore\Engine\ChatService;
+use ArnaudMoncondhuy\SynapseCore\Event\SynapseStatusChangedEvent;
+use ArnaudMoncondhuy\SynapseCore\Event\SynapseTokenStreamedEvent;
+use ArnaudMoncondhuy\SynapseCore\Event\SynapseToolCallCompletedEvent;
 use ArnaudMoncondhuy\SynapseCore\Formatter\MessageFormatter;
 use ArnaudMoncondhuy\SynapseCore\Manager\ConversationManager;
 use ArnaudMoncondhuy\SynapseCore\Shared\Enum\MessageRole;
@@ -15,7 +18,9 @@ use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmException;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmQuotaException;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmRateLimitException;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmServiceUnavailableException;
+use ArnaudMoncondhuy\SynapseCore\Shared\Model\TokenUsage;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Profiler\Profiler;
@@ -33,14 +38,15 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 class ChatApiController extends AbstractController
 {
     public function __construct(
-        private ChatService $chatService,
-        private PermissionCheckerInterface $permissionChecker,
-        private ?ConversationManager $conversationManager = null,
-        private ?MessageFormatter $messageFormatter = null,
-        private ?CsrfTokenManagerInterface $csrfTokenManager = null,
-        private ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenAccountingService $tokenAccountingService = null,
-        private ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenCostEstimator $tokenCostEstimator = null,
-        private ?TranslatorInterface $translator = null,
+        private readonly ChatService $chatService,
+        private readonly EventDispatcherInterface $dispatcher,
+        private readonly PermissionCheckerInterface $permissionChecker,
+        private readonly ?ConversationManager $conversationManager = null,
+        private readonly ?MessageFormatter $messageFormatter = null,
+        private readonly ?CsrfTokenManagerInterface $csrfTokenManager = null,
+        private readonly ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenAccountingService $tokenAccountingService = null,
+        private readonly ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenCostEstimator $tokenCostEstimator = null,
+        private readonly ?TranslatorInterface $translator = null,
     ) {
     }
 
@@ -186,27 +192,26 @@ class ChatApiController extends AbstractController
                     }
                 }
 
-                // Status update callback for streaming
-                $onStatusUpdate = function (string $statusMessage, string $step) use ($sendEvent): void {
-                    $sendEvent('status', ['message' => $statusMessage, 'step' => $step]);
+                // Temporary event listeners for NDJSON streaming (scoped to this request)
+                $statusListener = function (SynapseStatusChangedEvent $e) use ($sendEvent): void {
+                    $sendEvent('status', ['message' => $e->message, 'step' => $e->step]);
                 };
-
-                // Token streaming callback
-                $onToken = function (string $token) use ($sendEvent): void {
-                    $sendEvent('delta', ['text' => $token]);
+                $tokenListener = function (SynapseTokenStreamedEvent $e) use ($sendEvent): void {
+                    $sendEvent('delta', ['text' => $e->token]);
                 };
-
-                // Tool executed callback — envoie un événement immédiat pour les outils
-                $onToolExecuted = function (string $toolName, mixed $toolResult) use ($sendEvent, $conversation): void {
-                    $isProposeToRemember = 'propose_to_remember' === $toolName || str_ends_with($toolName, 'propose_to_remember');
-                    if ($isProposeToRemember && \is_array($toolResult) && ($toolResult['__synapse_action'] ?? '') === 'memory_proposal') {
+                $toolListener = function (SynapseToolCallCompletedEvent $e) use ($sendEvent, $conversation): void {
+                    $isProposeToRemember = 'propose_to_remember' === $e->getToolName() || str_ends_with($e->getToolName(), 'propose_to_remember');
+                    if ($isProposeToRemember && \is_array($e->getResult()) && ($e->getResult()['__synapse_action'] ?? '') === 'memory_proposal') {
                         $sendEvent('tool_executed', [
                             'tool' => 'propose_to_remember',
-                            'proposal' => $toolResult,
+                            'proposal' => $e->getResult(),
                             'conversation_id' => $conversation?->getId(),
                         ]);
                     }
                 };
+                $this->dispatcher->addListener(SynapseStatusChangedEvent::class, $statusListener);
+                $this->dispatcher->addListener(SynapseTokenStreamedEvent::class, $tokenListener);
+                $this->dispatcher->addListener(SynapseToolCallCompletedEvent::class, $toolListener);
 
                 // Pass user_id for spending limit checks
                 $user = $this->getUser();
@@ -263,8 +268,14 @@ class ChatApiController extends AbstractController
                     $typedOptions['reset_conversation'] = (bool) $options['reset_conversation'];
                 }
 
-                // Execute chat (ChatService will handle adding the new user message to history)
-                $result = $this->chatService->ask($message, $typedOptions, $onStatusUpdate, $onToken, $onToolExecuted, $images);
+                // Execute chat (ChatService dispatche les events SynapseTokenStreamedEvent, etc.)
+                try {
+                    $result = $this->chatService->ask($message, $typedOptions, $images);
+                } finally {
+                    $this->dispatcher->removeListener(SynapseStatusChangedEvent::class, $statusListener);
+                    $this->dispatcher->removeListener(SynapseTokenStreamedEvent::class, $tokenListener);
+                    $this->dispatcher->removeListener(SynapseToolCallCompletedEvent::class, $toolListener);
+                }
 
                 // Save BOTH user message and assistant response to database after processing
                 if ($conversation && $this->conversationManager) {
@@ -305,11 +316,7 @@ class ChatApiController extends AbstractController
                                 'chat',
                                 'chat_turn',
                                 $result['model'] ?? 'unknown',
-                                [
-                                    'prompt_tokens' => $usage['prompt_tokens'] ?? 0,
-                                    'completion_tokens' => $usage['completion_tokens'] ?? 0,
-                                    'thinking_tokens' => $usage['thinking_tokens'] ?? 0,
-                                ],
+                                TokenUsage::fromArray($result['usage'] ?? []),
                                 $user instanceof ConversationOwnerInterface ? (string) $user->getId() : null,
                                 $conversation->getId(),
                                 $result['preset_id'] ?? null,
@@ -364,11 +371,7 @@ class ChatApiController extends AbstractController
                                         'chat',
                                         'title_generation',
                                         $titleResult['model'] ?? 'unknown',
-                                        [
-                                            'prompt_tokens' => $titleResult['usage']['prompt_tokens'] ?? 0,
-                                            'completion_tokens' => $titleResult['usage']['completion_tokens'] ?? 0,
-                                            'thinking_tokens' => $titleResult['usage']['thinking_tokens'] ?? 0,
-                                        ],
+                                        TokenUsage::fromArray($titleResult['usage']),
                                         $titleUser instanceof ConversationOwnerInterface ? (string) $titleUser->getId() : null,
                                         $conversation->getId(),
                                         $titleResult['preset_id'] ?? null,
