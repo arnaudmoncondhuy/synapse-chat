@@ -373,7 +373,7 @@ export default class extends Controller {
                         this.setLoading(false);
                         this.addMessage('⏱️ Le serveur ne répond plus (Timeout).', 'assistant');
                     }
-                }, 15000); // 15s de silence avant timeout
+                }, 30000); // 30s de silence avant timeout
             };
 
             resetTimeout();
