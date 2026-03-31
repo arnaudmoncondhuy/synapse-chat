@@ -428,7 +428,7 @@ export default class extends Controller {
                                 }
 
                             } else if (evt.type === 'status' && evt.payload?.message) {
-                                // Update loading text if needed
+                                this.updateLoadingText(evt.payload.message);
                             } else if (evt.type === 'title') {
                                 // Titre auto-généré reçu
                                 if (evt.payload?.title) {
@@ -598,6 +598,11 @@ export default class extends Controller {
 
         this.messagesTarget.insertAdjacentHTML('beforeend', html);
         this.scrollToBottom();
+    }
+
+    updateLoadingText(text) {
+        const dots = this.element.querySelector('#synapse-chat-loading-ind .synapse-chat-dots');
+        if (dots) dots.textContent = text;
     }
 
     setLoading(isLoading) {
