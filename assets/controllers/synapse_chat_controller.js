@@ -35,7 +35,8 @@ export default class extends Controller {
         debugUrlTemplate: String,
         currentConversationId: String,
         debug: { type: Boolean, default: false },
-        supportsVision: { type: Boolean, default: false }
+        supportsVision: { type: Boolean, default: false },
+        attachmentUrlTemplate: { type: String, default: '/synapse/attachment/ATTACHMENT_ID' }
     };
 
     connect() {
@@ -71,6 +72,16 @@ export default class extends Controller {
 
         // Vision : tableau des images en attente d'envoi
         this.pendingImages = [];
+
+        // Lightbox : clic sur les images du chat pour les voir en grand
+        this.onImageClick = (e) => {
+            const img = e.target.closest('.synapse-chat-message-images img, .synapse-chat-input-images img');
+            if (!img) return;
+            this.openLightbox(img.src);
+        };
+        if (this.hasMessagesTarget) {
+            this.messagesTarget.addEventListener('click', this.onImageClick);
+        }
     }
 
     disconnect() {
@@ -79,6 +90,9 @@ export default class extends Controller {
             this.inputTarget.removeEventListener('input', this.onInput);
         }
         document.removeEventListener('click', this.onClickOutside);
+        if (this.hasMessagesTarget) {
+            this.messagesTarget.removeEventListener('click', this.onImageClick);
+        }
     }
 
     /* ── 1. GESTION DE LA SIDEBAR (MOBILE & LAYOUTS CONTRAINTS) ────── */
@@ -423,8 +437,23 @@ export default class extends Controller {
                                     if (this.debugValue && evt.payload?.debug_id) {
                                         this.addDebugButtonToMessage(currentMessageBubble.closest('.synapse-chat-message'), evt.payload.debug_id);
                                     }
-                                } else if (evt.payload?.answer && !currentResponseText) {
-                                    this.addMessage(evt.payload.answer, 'assistant', { debug_id: evt.payload.debug_id });
+                                } else if (!currentMessageBubble && (evt.payload?.answer || evt.payload?.generated_attachments?.length > 0)) {
+                                    // Pas de streaming (image-only ou réponse directe) : créer le bubble
+                                    const displayText = evt.payload?.answer && evt.payload.answer !== '[image]' ? evt.payload.answer : '';
+                                    this.addMessage(displayText, 'assistant', { debug_id: evt.payload.debug_id });
+                                    const messages = this.messagesTarget.querySelectorAll('.synapse-chat-message--assistant');
+                                    currentMessageBubble = messages[messages.length - 1].querySelector('.synapse-chat-bubble');
+                                }
+
+                                // Afficher les images générées par le LLM
+                                if (currentMessageBubble && evt.payload?.generated_attachments?.length > 0) {
+                                    const imagesHtml = '<div class="synapse-chat-message-images">' +
+                                        evt.payload.generated_attachments.map(att => {
+                                            const url = this.attachmentUrlTemplateValue.replace('ATTACHMENT_ID', att.uuid);
+                                            return `<img src="${url}" alt="Image générée" class="synapse-chat-generated-image">`;
+                                        }).join('') +
+                                        '</div>';
+                                    currentMessageBubble.insertAdjacentHTML('afterbegin', imagesHtml);
                                 }
 
                             } else if (evt.type === 'status' && evt.payload?.message) {
@@ -543,6 +572,17 @@ export default class extends Controller {
     clearPendingImages() {
         this.pendingImages = [];
         this.renderImagePreview();
+    }
+
+    openLightbox(src) {
+        const overlay = document.createElement('div');
+        overlay.className = 'synapse-chat-lightbox';
+        overlay.innerHTML = `<img src="${src}" alt="Image en grand">`;
+        overlay.addEventListener('click', () => overlay.remove());
+        document.addEventListener('keydown', function handler(e) {
+            if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', handler); }
+        });
+        document.body.appendChild(overlay);
     }
 
     addMessage(text, role, metadata = {}) {

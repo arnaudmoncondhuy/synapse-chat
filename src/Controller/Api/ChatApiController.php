@@ -179,6 +179,10 @@ class ChatApiController extends AbstractController
                     // Convert DB messages to ChatService format using formatter (handles decryption)
                     if ($this->messageFormatter) {
                         $options['history'] = $this->messageFormatter->entitiesToApiFormat($dbMessages);
+                        $trailingImages = $this->messageFormatter->getAndClearTrailingImages();
+                        if (!empty($trailingImages)) {
+                            $options['_trailing_generated_images'] = $trailingImages;
+                        }
                     } else {
                         // Fallback (legacy risks sending encrypted content)
                         $history = [];
@@ -267,6 +271,9 @@ class ChatApiController extends AbstractController
                 if (isset($options['reset_conversation'])) {
                     $typedOptions['reset_conversation'] = (bool) $options['reset_conversation'];
                 }
+                if (isset($options['_trailing_generated_images']) && is_array($options['_trailing_generated_images'])) {
+                    $typedOptions['_trailing_generated_images'] = $options['_trailing_generated_images'];
+                }
 
                 // Execute chat (ChatService dispatche les events SynapseTokenStreamedEvent, etc.)
                 try {
@@ -284,7 +291,8 @@ class ChatApiController extends AbstractController
                         $this->conversationManager->saveMessage($conversation, MessageRole::USER, $message ?: '[image]', [], null, $images);
                     }
 
-                    if (!empty($result['answer'])) {
+                    $hasGeneratedImages = !empty($result['generated_images']);
+                    if (!empty($result['answer']) || $hasGeneratedImages) {
                         $usage = $result['usage'] ?? [];
                         $safetyRatings = [];
                         foreach ($result['safety'] ?? [] as $rating) {
@@ -326,7 +334,20 @@ class ChatApiController extends AbstractController
                         }
 
                         // Lier le message assistant à son appel LLM (callId)
-                        $this->conversationManager->saveMessage($conversation, MessageRole::MODEL, $result['answer'], $metadata, $callId);
+                        /** @var list<array{mime_type: string, data: string}> $generatedImages */
+                        $generatedImages = is_array($result['generated_images'] ?? null) ? $result['generated_images'] : [];
+                        $answerText = ('' !== $result['answer']) ? $result['answer'] : ($hasGeneratedImages ? '[image]' : '');
+                        $modelMessage = $this->conversationManager->saveMessage($conversation, MessageRole::MODEL, $answerText, $metadata, $callId, $generatedImages);
+
+                        // Inclure les UUIDs des images générées dans le résultat (pour affichage front)
+                        if (!empty($generatedImages)) {
+                            $savedAttachments = $this->conversationManager->getAttachmentsByMessageId($modelMessage->getId());
+                            $result['generated_attachments'] = array_map(
+                                fn ($att) => ['uuid' => $att->getId(), 'mime_type' => $att->getMimeType()],
+                                $savedAttachments
+                            );
+                        }
+                        unset($result['generated_images']);
                     }
                 }
 
@@ -339,18 +360,21 @@ class ChatApiController extends AbstractController
                 $sendEvent('result', $result);
 
                 // Auto-generate title for new conversations (first exchange)
-                if ($conversation && $this->conversationManager && !empty($message)) {
+                // Skip si le modèle n'a produit qu'une image (pas de texte à résumer)
+                $hasTextAnswer = !empty($result['answer']) && '[image]' !== $result['answer'];
+                if ($conversation && $this->conversationManager && !empty($message) && $hasTextAnswer) {
                     try {
                         $messages = $this->conversationManager->getMessages($conversation);
 
                         // Check if this is the first exchange (exactly 2 messages: 1 user + 1 model)
                         if (2 === count($messages)) {
                             $titlePrompt = $this->translator
-                                ? $this->translator->trans('synapse.chat.api.title_generation_prompt', ['%message%' => $message], 'synapse_chat')
+                                ? $this->translator->trans('synapse.chat.api.title_generation_prompt', ['message' => $message], 'synapse_chat')
                                 : "Génère un titre très court (max 6 mots) sans guillemets pour : '$message'";
 
                             // Generate title in stateless mode (don't pollute conversation history)
-                            $titleResult = $this->chatService->ask($titlePrompt, ['stateless' => true, 'debug' => false]);
+                            // Override system prompt to avoid preset instructions polluting the title
+                            $titleResult = $this->chatService->ask($titlePrompt, ['stateless' => true, 'debug' => false, 'system_prompt' => 'You are a title generator. Respond with only the title, nothing else.']);
 
                             if (!empty($titleResult['answer'])) {
                                 // Clean the result (remove quotes, etc.)
@@ -398,7 +422,7 @@ class ChatApiController extends AbstractController
                 } elseif ($e instanceof LlmServiceUnavailableException) {
                     $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.llm_unavailable', [], 'synapse_chat') : '🔧 Service indisponible : Le service IA est temporairement inaccessible.';
                 } elseif ($e instanceof LlmException) {
-                    $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.llm_generic', ['%error%' => $e->getMessage()], 'synapse_chat') : '🤖 Erreur IA : '.$e->getMessage();
+                    $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.llm_generic', ['error' => $e->getMessage()], 'synapse_chat') : '🤖 Erreur IA : '.$e->getMessage();
                 } elseif (str_contains((string) $errorMessage, 'timeout') || str_contains((string) $errorMessage, 'Timeout')) {
                     $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.timeout', [], 'synapse_chat') : "⏱️ Timeout : L'IA a mis trop de temps à répondre.";
                 } else {

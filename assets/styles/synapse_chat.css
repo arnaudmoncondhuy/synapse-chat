@@ -1412,4 +1412,33 @@
     object-fit: cover;
     border: 1px solid var(--synapse-chat-border);
     cursor: pointer;
+    transition: opacity 0.15s;
+}
+.synapse-chat-message-images img:hover {
+    opacity: 0.85;
+}
+
+/* Lightbox */
+.synapse-chat-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.8);
+    cursor: zoom-out;
+    animation: synapse-lightbox-in 0.15s ease;
+}
+.synapse-chat-lightbox img {
+    max-width: 90vw;
+    max-height: 90vh;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    object-fit: contain;
+}
+
+@keyframes synapse-lightbox-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }

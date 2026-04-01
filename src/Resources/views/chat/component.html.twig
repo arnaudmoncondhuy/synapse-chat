@@ -52,6 +52,7 @@
      data-{{ controller_override }}-conversations-url-value="{{ path('synapse_api_conversations_list') }}"
      data-{{ controller_override }}-current-conversation-id-value="{{ currentConversationId }}"
      data-{{ controller_override }}-debug-url-template-value="{{ path('synapse_debug_show', {'id': 'DEBUG_ID'}) }}"
+     data-{{ controller_override }}-attachment-url-template-value="{{ path('synapse_attachment_serve', {'uuid': 'ATTACHMENT_ID'}) }}"
      data-{{ controller_override }}-debug-value="{{ (debug_mode|default(false) and synapse_can_debug()) ? 'true' : 'false' }}"
      data-{{ controller_override }}-stateless-value="{{ app.request.query.get('stateless', false) ? 'true' : 'false' }}"
      data-{{ controller_override }}-supports-vision-value="{{ synapse_active_model_supports('vision') ? 'true' : 'false' }}"
@@ -169,16 +170,18 @@
                         
                         <div class="synapse-chat-message__content">
                             <div class="synapse-chat-bubble">
-                                {# Afficher les images depuis les pièces jointes #}
-                                {% if not is_ai and msg.attachments is defined and msg.attachments is not empty %}
+                                {# Afficher les images depuis les pièces jointes (user et générées par l'IA) #}
+                                {% if msg.attachments is defined and msg.attachments is not empty %}
                                     <div class="synapse-chat-message-images">
                                         {% for att in msg.attachments %}
-                                            <img src="{{ path('synapse_attachment_serve', {uuid: att.uuid}) }}" alt="Image attachée">
+                                            <img src="{{ path('synapse_attachment_serve', {uuid: att.uuid}) }}" alt="{{ is_ai ? 'Image générée' : 'Image attachée' }}" class="synapse-chat-generated-image">
                                         {% endfor %}
                                     </div>
                                 {% endif %}
                                 {% set displayContent = msg.decryptedContent is defined ? msg.decryptedContent : (msg.content is defined ? msg.content : '') %}
-                                {{ displayContent|synapse_markdown }}
+                                {% if displayContent != '[image]' %}
+                                    {{ displayContent|synapse_markdown }}
+                                {% endif %}
                             </div>
                             {% if is_ai and debug_mode|default(false) and synapse_can_debug() and msg.metadata.debug_id is defined %}
                                 <button type="button" class="synapse-chat-debug-btn" data-action="click->{{ controller_override }}#showDebug" data-debug-id="{{ msg.metadata.debug_id }}" title="Voir le debug">

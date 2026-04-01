@@ -46,4 +46,4 @@ synapse.chat.api.error.llm_generic: "🤖 Erreur IA : {error}"
 synapse.chat.api.error.timeout: "⏱️ Timeout : L'IA a mis trop de temps à répondre."
 synapse.chat.api.error.system: "❌ Erreur système : Une erreur inattendue est survenue."
 
-synapse.chat.api.title_generation_prompt: "Génère un titre très court (max 6 mots) sans guillemets pour : '{message}'"
+synapse.chat.api.title_generation_prompt: "Génère un titre très court (max 6 mots) sans guillemets pour : ''{message}''"
