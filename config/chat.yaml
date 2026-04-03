@@ -10,8 +10,6 @@ services:
   # ── API Controllers ────────────────────────────────────────────────────────
   ArnaudMoncondhuy\SynapseChat\Controller\Api\:
     resource: '../src/Controller/Api/'
-    tags: ['controller.service_arguments']
 
   ArnaudMoncondhuy\SynapseChat\Controller\UI\:
     resource: '../src/Controller/UI/'
-    tags: ['controller.service_arguments']

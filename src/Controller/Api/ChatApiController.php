@@ -292,6 +292,15 @@ class ChatApiController extends AbstractController
                     }
 
                     $hasGeneratedImages = !empty($result['generated_images']);
+                    // Quand des images sont générées, supprimer les artefacts de formatage purs
+                    // (ex: "```" retourné par certains modèles en multi-tour).
+                    // Le texte légitime accompagnant une image est préservé.
+                    if ($hasGeneratedImages && '' !== ($result['answer'] ?? '')) {
+                        $stripped = trim(str_replace(['`', "\n", "\r"], '', (string) $result['answer']));
+                        if ('' === $stripped) {
+                            $result['answer'] = '';
+                        }
+                    }
                     if (!empty($result['answer']) || $hasGeneratedImages) {
                         $usage = $result['usage'] ?? [];
                         $safetyRatings = [];
