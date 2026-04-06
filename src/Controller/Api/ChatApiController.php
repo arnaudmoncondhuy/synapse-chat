@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace ArnaudMoncondhuy\SynapseChat\Controller\Api;
 
+use ArnaudMoncondhuy\SynapseCore\Agent\AgentResolver;
+use ArnaudMoncondhuy\SynapseCore\Agent\Input;
+use ArnaudMoncondhuy\SynapseCore\Agent\WorkflowDelegatingAgent;
+use ArnaudMoncondhuy\SynapseCore\AgentRegistry;
 use ArnaudMoncondhuy\SynapseCore\Contract\ConversationOwnerInterface;
 use ArnaudMoncondhuy\SynapseCore\Contract\PermissionCheckerInterface;
 use ArnaudMoncondhuy\SynapseCore\Engine\ChatService;
 use ArnaudMoncondhuy\SynapseCore\Event\SynapseStatusChangedEvent;
 use ArnaudMoncondhuy\SynapseCore\Event\SynapseTokenStreamedEvent;
 use ArnaudMoncondhuy\SynapseCore\Event\SynapseToolCallCompletedEvent;
+use ArnaudMoncondhuy\SynapseCore\Event\SynapseWorkflowStepCompletedEvent;
+use ArnaudMoncondhuy\SynapseCore\Event\SynapseWorkflowStepStartedEvent;
 use ArnaudMoncondhuy\SynapseCore\Formatter\MessageFormatter;
 use ArnaudMoncondhuy\SynapseCore\Manager\ConversationManager;
 use ArnaudMoncondhuy\SynapseCore\Shared\Enum\MessageRole;
@@ -18,7 +24,6 @@ use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmException;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmQuotaException;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmRateLimitException;
 use ArnaudMoncondhuy\SynapseCore\Shared\Exception\LlmServiceUnavailableException;
-use ArnaudMoncondhuy\SynapseCore\Shared\Model\TokenUsage;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -41,10 +46,11 @@ class ChatApiController extends AbstractController
         private readonly ChatService $chatService,
         private readonly EventDispatcherInterface $dispatcher,
         private readonly PermissionCheckerInterface $permissionChecker,
+        private readonly AgentRegistry $agentRegistry,
+        private readonly AgentResolver $agentResolver,
         private readonly ?ConversationManager $conversationManager = null,
         private readonly ?MessageFormatter $messageFormatter = null,
         private readonly ?CsrfTokenManagerInterface $csrfTokenManager = null,
-        private readonly ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenAccountingService $tokenAccountingService = null,
         private readonly ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenCostEstimator $tokenCostEstimator = null,
         private readonly ?TranslatorInterface $translator = null,
     ) {
@@ -100,10 +106,10 @@ class ChatApiController extends AbstractController
         $messageRaw = $data['message'] ?? '';
         $message = is_string($messageRaw) ? $messageRaw : '';
 
-        // Vision: images optionnelles [['mime_type' => 'image/jpeg', 'data' => 'base64...']]
-        $imagesRaw = $data['images'] ?? [];
-        $images = is_array($imagesRaw)
-            ? array_values(array_filter($imagesRaw, fn ($i) => is_array($i) && isset($i['data'], $i['mime_type']) && is_string($i['data']) && is_string($i['mime_type'])))
+        // Pièces jointes (images, PDF, etc.) — accepte 'attachments' (nouveau) ou 'images' (rétrocompat)
+        $attachmentsRaw = $data['attachments'] ?? $data['images'] ?? [];
+        $attachments = is_array($attachmentsRaw)
+            ? array_values(array_filter($attachmentsRaw, fn ($i) => is_array($i) && isset($i['data'], $i['mime_type']) && is_string($i['data']) && is_string($i['mime_type'])))
             : [];
 
         $optionsRaw = $data['options'] ?? [];
@@ -132,7 +138,7 @@ class ChatApiController extends AbstractController
             }
         }
 
-        $response = new StreamedResponse(function () use ($message, $options, $conversation, $conversationId, $images) {
+        $response = new StreamedResponse(function () use ($message, $options, $conversation, $conversationId, $attachments) {
             // CRITICAL: Disable ALL output buffering to prevent Symfony Debug Toolbar injection
             // The toolbar tries to inject HTML into buffered output, corrupting NDJSON stream
             while (ob_get_level() > 0) {
@@ -155,7 +161,7 @@ class ChatApiController extends AbstractController
             flush();
 
             $isReset = isset($options['reset_conversation']) && true === $options['reset_conversation'];
-            if (empty($message) && !$isReset) {
+            if (empty($message) && empty($attachments) && !$isReset) {
                 $msg = $this->translator ? $this->translator->trans('synapse.chat.api.error.message_required', [], 'synapse_chat') : 'SynapseMessage is required.';
                 $sendEvent('error', $msg);
 
@@ -164,7 +170,7 @@ class ChatApiController extends AbstractController
 
             try {
                 // Create or get conversation if persistence enabled
-                if ($this->conversationManager && !$conversation && !empty($message)) {
+                if ($this->conversationManager && !$conversation && (!empty($message) || !empty($attachments))) {
                     $user = $this->getUser();
                     if ($user instanceof ConversationOwnerInterface) {
                         $conversation = $this->conversationManager->createConversation($user);
@@ -179,9 +185,9 @@ class ChatApiController extends AbstractController
                     // Convert DB messages to ChatService format using formatter (handles decryption)
                     if ($this->messageFormatter) {
                         $options['history'] = $this->messageFormatter->entitiesToApiFormat($dbMessages);
-                        $trailingImages = $this->messageFormatter->getAndClearTrailingImages();
-                        if (!empty($trailingImages)) {
-                            $options['_trailing_generated_images'] = $trailingImages;
+                        $trailingAttachments = $this->messageFormatter->getAndClearTrailingAttachments();
+                        if (!empty($trailingAttachments)) {
+                            $options['_trailing_generated_attachments'] = $trailingAttachments;
                         }
                     } else {
                         // Fallback (legacy risks sending encrypted content)
@@ -200,7 +206,16 @@ class ChatApiController extends AbstractController
                 $statusListener = function (SynapseStatusChangedEvent $e) use ($sendEvent): void {
                     $sendEvent('status', ['message' => $e->message, 'step' => $e->step]);
                 };
-                $tokenListener = function (SynapseTokenStreamedEvent $e) use ($sendEvent): void {
+                // $isWorkflowMode est positionné plus bas, mais on a besoin d'une ref
+                // mutable ici pour que le listener puisse la lire.
+                $workflowModeRef = new \stdClass();
+                $workflowModeRef->active = false;
+                $tokenListener = function (SynapseTokenStreamedEvent $e) use ($sendEvent, $workflowModeRef): void {
+                    // En mode workflow, ne PAS streamer les tokens des sous-agents dans le chat.
+                    // Les résultats de chaque step sont affichés dans la sidebar via workflow_step events.
+                    if ($workflowModeRef->active) {
+                        return;
+                    }
                     $sendEvent('delta', ['text' => $e->token]);
                 };
                 $toolListener = function (SynapseToolCallCompletedEvent $e) use ($sendEvent, $conversation): void {
@@ -213,9 +228,31 @@ class ChatApiController extends AbstractController
                         ]);
                     }
                 };
+                $workflowStepStartedListener = function (SynapseWorkflowStepStartedEvent $e) use ($sendEvent): void {
+                    $sendEvent('workflow_step_started', [
+                        'workflowRunId' => $e->workflowRunId,
+                        'stepIndex' => $e->stepIndex,
+                        'stepName' => $e->stepName,
+                        'agentName' => $e->agentName,
+                        'totalSteps' => $e->totalSteps,
+                    ]);
+                };
+                $workflowStepListener = function (SynapseWorkflowStepCompletedEvent $e) use ($sendEvent): void {
+                    $sendEvent('workflow_step', [
+                        'workflowRunId' => $e->workflowRunId,
+                        'stepIndex' => $e->stepIndex,
+                        'stepName' => $e->stepName,
+                        'agentName' => $e->agentName,
+                        'answer' => $e->answer,
+                        'totalSteps' => $e->totalSteps,
+                        'usage' => $e->usage,
+                    ]);
+                };
                 $this->dispatcher->addListener(SynapseStatusChangedEvent::class, $statusListener);
                 $this->dispatcher->addListener(SynapseTokenStreamedEvent::class, $tokenListener);
                 $this->dispatcher->addListener(SynapseToolCallCompletedEvent::class, $toolListener);
+                $this->dispatcher->addListener(SynapseWorkflowStepStartedEvent::class, $workflowStepStartedListener);
+                $this->dispatcher->addListener(SynapseWorkflowStepCompletedEvent::class, $workflowStepListener);
 
                 // Pass user_id for spending limit checks
                 $user = $this->getUser();
@@ -239,8 +276,16 @@ class ChatApiController extends AbstractController
                 }
 
                 // Build typed options array for ChatService::ask
-                /** @var array{tone?: string, history?: array<int, array<string, mixed>>, stateless?: bool, debug?: bool, preset?: \ArnaudMoncondhuy\SynapseCore\Storage\Entity\SynapseModelPreset, conversation_id?: string, user_id?: string, estimated_cost_reference?: float, streaming?: bool, reset_conversation?: bool} $typedOptions */
-                $typedOptions = [];
+                /** @var array{tone?: string, history?: array<int, array<string, mixed>>, stateless?: bool, debug?: bool, preset?: \ArnaudMoncondhuy\SynapseCore\Storage\Entity\SynapseModelPreset, conversation_id?: string, user_id?: string, estimated_cost_reference?: float, streaming?: bool, reset_conversation?: bool, module?: string, action?: string} $typedOptions */
+                $typedOptions = [
+                    // ChatService est le point unique de token accounting : il va créer la ligne
+                    // SynapseLlmCall avec ces valeurs (module/action alignés sur Analytics).
+                    // Pour un modèle image-only, ChatService basculera automatiquement l'action
+                    // vers `image_generation`. Pour un modèle mixte (texte+image), l'action reste
+                    // `chat_turn` et les imageCompletionTokens sont facturés via pricing_output_image.
+                    'module' => 'chat',
+                    'action' => 'chat_turn',
+                ];
                 if (isset($options['tone']) && is_string($options['tone'])) {
                     $typedOptions['tone'] = $options['tone'];
                 }
@@ -271,37 +316,76 @@ class ChatApiController extends AbstractController
                 if (isset($options['reset_conversation'])) {
                     $typedOptions['reset_conversation'] = (bool) $options['reset_conversation'];
                 }
-                if (isset($options['_trailing_generated_images']) && is_array($options['_trailing_generated_images'])) {
-                    $typedOptions['_trailing_generated_images'] = $options['_trailing_generated_images'];
+                if (isset($options['_trailing_generated_attachments']) && is_array($options['_trailing_generated_attachments'])) {
+                    $typedOptions['_trailing_generated_attachments'] = $options['_trailing_generated_attachments'];
+                }
+
+                // ── Workflow delegation ──
+                // Si l'agent sélectionné a un workflowKey, on court-circuite ChatService
+                // et on délègue à WorkflowDelegatingAgent → WorkflowRunner → MultiAgent.
+                // Les sous-agents du workflow appelleront eux-mêmes ChatService.
+                $workflowAgent = null;
+                if (isset($typedOptions['agent']) && is_string($typedOptions['agent']) && '' !== $typedOptions['agent']) {
+                    $agentEntity = $this->agentRegistry->get($typedOptions['agent']);
+                    if (null !== $agentEntity && null !== $agentEntity->getWorkflowKey()) {
+                        $ctx = $this->agentResolver->createRootContext(
+                            userId: $typedOptions['user_id'] ?? null,
+                            origin: 'chat',
+                        );
+                        $workflowAgent = $this->agentResolver->resolve($typedOptions['agent'], $ctx);
+                        // Activer le mode workflow : les tokens des sous-agents ne sont pas
+                        // streamés dans le chat. Seuls les workflow_step events apparaissent
+                        // dans la sidebar, et le résultat final est envoyé via l'event 'result'.
+                        $workflowModeRef->active = true;
+                    }
                 }
 
                 // Execute chat (ChatService dispatche les events SynapseTokenStreamedEvent, etc.)
                 try {
-                    $result = $this->chatService->ask($message, $typedOptions, $images);
+                    if (null !== $workflowAgent) {
+                        $sendEvent('status', ['message' => 'Exécution du workflow…', 'step' => 'workflow']);
+                        $agentOutput = $workflowAgent->call(new Input($message), $typedOptions);
+                        // Convertir Output en format $result attendu par le reste du contrôleur
+                        $result = [
+                            'answer' => $agentOutput->getAnswer() ?? '',
+                            'usage' => $agentOutput->getUsage(),
+                            'safety' => $agentOutput->getMetadata()['safety'] ?? [],
+                            'model' => $agentOutput->getMetadata()['model'] ?? null,
+                            'preset_id' => $agentOutput->getMetadata()['preset_id'] ?? null,
+                            'agent_id' => $agentEntity?->getId(),
+                            'debug_id' => $agentOutput->getDebugId(),
+                            'generated_attachments' => $agentOutput->getGeneratedAttachments(),
+                            'call_id' => null, // Les call_ids sont sur les sous-agents
+                        ];
+                    } else {
+                        $result = $this->chatService->ask($message, $typedOptions, $attachments);
+                    }
                 } finally {
                     $this->dispatcher->removeListener(SynapseStatusChangedEvent::class, $statusListener);
                     $this->dispatcher->removeListener(SynapseTokenStreamedEvent::class, $tokenListener);
                     $this->dispatcher->removeListener(SynapseToolCallCompletedEvent::class, $toolListener);
+                    $this->dispatcher->removeListener(SynapseWorkflowStepStartedEvent::class, $workflowStepStartedListener);
+                    $this->dispatcher->removeListener(SynapseWorkflowStepCompletedEvent::class, $workflowStepListener);
                 }
 
                 // Save BOTH user message and assistant response to database after processing
                 if ($conversation && $this->conversationManager) {
                     // Save user message (pas d'appel LLM associé)
-                    if ('' !== $message || !empty($images)) {
-                        $this->conversationManager->saveMessage($conversation, MessageRole::USER, $message ?: '[image]', [], null, $images);
+                    if ('' !== $message || !empty($attachments)) {
+                        $this->conversationManager->saveMessage($conversation, MessageRole::USER, $message, [], null, $attachments);
                     }
 
-                    $hasGeneratedImages = !empty($result['generated_images']);
+                    $hasGeneratedAttachments = !empty($result['generated_attachments']);
                     // Quand des images sont générées, supprimer les artefacts de formatage purs
                     // (ex: "```" retourné par certains modèles en multi-tour).
                     // Le texte légitime accompagnant une image est préservé.
-                    if ($hasGeneratedImages && '' !== ($result['answer'] ?? '')) {
+                    if ($hasGeneratedAttachments && '' !== ($result['answer'] ?? '')) {
                         $stripped = trim(str_replace(['`', "\n", "\r"], '', (string) $result['answer']));
                         if ('' === $stripped) {
                             $result['answer'] = '';
                         }
                     }
-                    if (!empty($result['answer']) || $hasGeneratedImages) {
+                    if (!empty($result['answer']) || $hasGeneratedAttachments) {
                         $usage = $result['usage'] ?? [];
                         $safetyRatings = [];
                         foreach ($result['safety'] ?? [] as $rating) {
@@ -326,37 +410,27 @@ class ChatApiController extends AbstractController
                             'metadata' => ['debug_id' => $result['debug_id'] ?? null],
                         ];
 
-                        // Log l'appel LLM dans synapse_llm_call et récupérer le callId
-                        $callId = null;
-                        if (null !== $this->tokenAccountingService) {
-                            $llmCall = $this->tokenAccountingService->logUsage(
-                                'chat',
-                                'chat_turn',
-                                $result['model'] ?? 'unknown',
-                                TokenUsage::fromArray($result['usage'] ?? []),
-                                $user instanceof ConversationOwnerInterface ? (string) $user->getId() : null,
-                                $conversation->getId(),
-                                $result['preset_id'] ?? null,
-                                $result['agent_id'] ?? null
-                            );
-                            $callId = $llmCall->getCallId();
-                        }
+                        // Le token accounting (SynapseLlmCall) est fait par ChatService (source unique).
+                        // On récupère simplement le call_id retourné pour lier SynapseMessage à l'appel LLM.
+                        // Voir feedback_token_cost_single_source : aucun logUsage() parallèle ici.
+                        $callId = is_string($result['call_id'] ?? null) ? $result['call_id'] : null;
 
                         // Lier le message assistant à son appel LLM (callId)
-                        /** @var list<array{mime_type: string, data: string}> $generatedImages */
-                        $generatedImages = is_array($result['generated_images'] ?? null) ? $result['generated_images'] : [];
-                        $answerText = ('' !== $result['answer']) ? $result['answer'] : ($hasGeneratedImages ? '[image]' : '');
-                        $modelMessage = $this->conversationManager->saveMessage($conversation, MessageRole::MODEL, $answerText, $metadata, $callId, $generatedImages);
+                        /** @var list<array{mime_type: string, data: string}> $generatedAttachments */
+                        $generatedAttachments = is_array($result['generated_attachments'] ?? null) ? $result['generated_attachments'] : [];
+                        $answerText = ('' !== $result['answer']) ? $result['answer'] : ($hasGeneratedAttachments ? '[image]' : '');
+                        $modelMessage = $this->conversationManager->saveMessage($conversation, MessageRole::MODEL, $answerText, $metadata, $callId, $generatedAttachments);
 
                         // Inclure les UUIDs des images générées dans le résultat (pour affichage front)
-                        if (!empty($generatedImages)) {
+                        if (!empty($generatedAttachments)) {
                             $savedAttachments = $this->conversationManager->getAttachmentsByMessageId($modelMessage->getId());
                             $result['generated_attachments'] = array_map(
-                                fn ($att) => ['uuid' => $att->getId(), 'mime_type' => $att->getMimeType()],
+                                fn ($att) => ['uuid' => $att->getId(), 'mime_type' => $att->getMimeType(), 'display_name' => $att->getDisplayName()],
                                 $savedAttachments
                             );
+                        } else {
+                            unset($result['generated_attachments']);
                         }
-                        unset($result['generated_images']);
                     }
                 }
 
@@ -382,8 +456,21 @@ class ChatApiController extends AbstractController
                                 : "Génère un titre très court (max 6 mots) sans guillemets pour : '$message'";
 
                             // Generate title in stateless mode (don't pollute conversation history)
-                            // Override system prompt to avoid preset instructions polluting the title
-                            $titleResult = $this->chatService->ask($titlePrompt, ['stateless' => true, 'debug' => false, 'system_prompt' => 'You are a title generator. Respond with only the title, nothing else.']);
+                            // Override system prompt to avoid preset instructions polluting the title.
+                            // Token accounting : module/action passés à ChatService (point unique).
+                            $titleAskOptions = [
+                                'stateless' => true,
+                                'debug' => true,
+                                'system_prompt' => 'You are a title generator. Respond with only the title, nothing else.',
+                                'module' => 'chat',
+                                'action' => 'title_generation',
+                                'conversation_id' => $conversation->getId(),
+                            ];
+                            $titleUser = $this->getUser();
+                            if ($titleUser instanceof ConversationOwnerInterface) {
+                                $titleAskOptions['user_id'] = (string) $titleUser->getId();
+                            }
+                            $titleResult = $this->chatService->ask($titlePrompt, $titleAskOptions);
 
                             if (!empty($titleResult['answer'])) {
                                 // Clean the result (remove quotes, etc.)
@@ -395,20 +482,6 @@ class ChatApiController extends AbstractController
 
                                     // Send title update event to frontend
                                     $sendEvent('title', ['title' => $newTitle]);
-                                }
-
-                                // Track title generation cost (stateless call)
-                                if (null !== $this->tokenAccountingService && !empty($titleResult['usage'])) {
-                                    $titleUser = $this->getUser();
-                                    $this->tokenAccountingService->logUsage(
-                                        'chat',
-                                        'title_generation',
-                                        $titleResult['model'] ?? 'unknown',
-                                        TokenUsage::fromArray($titleResult['usage']),
-                                        $titleUser instanceof ConversationOwnerInterface ? (string) $titleUser->getId() : null,
-                                        $conversation->getId(),
-                                        $titleResult['preset_id'] ?? null,
-                                    );
                                 }
                             }
                         }
@@ -435,13 +508,11 @@ class ChatApiController extends AbstractController
                 } elseif (str_contains((string) $errorMessage, 'timeout') || str_contains((string) $errorMessage, 'Timeout')) {
                     $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.timeout', [], 'synapse_chat') : "⏱️ Timeout : L'IA a mis trop de temps à répondre.";
                 } else {
-                    // En dev : afficher la vraie erreur + fichier:ligne pour cibler le coupable
+                    // Logger l'erreur complète côté serveur, ne jamais exposer de détails au client
                     if ($this->getParameter('kernel.debug')) {
-                        $file = basename($e->getFile());
-                        $errorMessage = sprintf('❌ %s (%s:%d)', $errorMessage, $file, $e->getLine());
-                    } else {
-                        $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.system', [], 'synapse_chat') : '❌ Erreur système : Une erreur inattendue est survenue.';
+                        error_log(sprintf('[Synapse] %s (%s:%d)', $e->getMessage(), $e->getFile(), $e->getLine()));
                     }
+                    $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.system', [], 'synapse_chat') : '❌ Erreur système : Une erreur inattendue est survenue.';
                 }
 
                 $sendEvent('error', (string) $errorMessage);

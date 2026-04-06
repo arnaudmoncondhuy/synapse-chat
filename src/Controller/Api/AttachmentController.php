@@ -7,7 +7,9 @@ namespace ArnaudMoncondhuy\SynapseChat\Controller\Api;
 use ArnaudMoncondhuy\SynapseCore\Contract\PermissionCheckerInterface;
 use ArnaudMoncondhuy\SynapseCore\Service\AttachmentStorageService;
 use ArnaudMoncondhuy\SynapseCore\Storage\Repository\SynapseMessageAttachmentRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -19,6 +21,9 @@ class AttachmentController extends AbstractController
         private readonly SynapseMessageAttachmentRepository $attachmentRepository,
         private readonly AttachmentStorageService $attachmentStorage,
         private readonly PermissionCheckerInterface $permissionChecker,
+        private readonly EntityManagerInterface $em,
+        #[Autowire('%synapse.persistence.message_class%')]
+        private readonly string $messageClass,
     ) {
     }
 
@@ -31,6 +36,14 @@ class AttachmentController extends AbstractController
         $attachment = $this->attachmentRepository->find($uuid);
         if (!$attachment) {
             throw $this->createNotFoundException();
+        }
+
+        // Vérifier que l'utilisateur est propriétaire de la conversation liée
+        /** @var class-string<\ArnaudMoncondhuy\SynapseCore\Storage\Entity\SynapseMessage> $messageClass */
+        $messageClass = $this->messageClass;
+        $message = $this->em->find($messageClass, $attachment->getMessageId());
+        if (!$message || !$this->permissionChecker->canView($message->getConversation())) {
+            throw $this->createAccessDeniedException();
         }
 
         $path = $this->attachmentStorage->getAbsolutePath($attachment);

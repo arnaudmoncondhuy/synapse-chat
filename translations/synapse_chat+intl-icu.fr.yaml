@@ -11,19 +11,21 @@ synapse.chat.sidebar.memory.input_placeholder: "Nouveau fait à retenir..."
 synapse.chat.sidebar.memory.add_title: "Ajouter à la mémoire"
 synapse.chat.sidebar.memory.empty: "Aucun souvenir retenu"
 
+synapse.chat.header.default_title: "Nouvelle conversation"
 synapse.chat.greeting.title: "Bonjour"
 synapse.chat.greeting.subtitle: "Comment puis-je vous aider aujourd'hui ?"
 
-synapse.chat.input_area.placeholder: "Posez votre question ou saisissez un prompt..."
+synapse.chat.input_area.placeholder: "Écrivez votre message..."
 synapse.chat.input_area.label: "Message explicatif"
 synapse.chat.input_area.action.send: "Envoyer"
-synapse.chat.input_area.action.attach: "Joindre une image"
+synapse.chat.input_area.action.attach: "Joindre un fichier"
 synapse.chat.input_area.disclaimer: "L'IA peut générer des informations incorrectes. Vérifiez les faits importants."
 
 synapse.chat.input_area.agent.label: "Agent"
 synapse.chat.input_area.agent.aria_label: "Choisir un agent"
 synapse.chat.input_area.agent.notice: "L'agent définit le rôle, le contexte et les outils disponibles pour cette conversation."
 synapse.chat.input_area.agent.default: "Aucun agent (Par défaut)"
+synapse.chat.agent.workflow_badge: "Pipeline multi-agents"
 
 synapse.chat.input_area.tone.label: "Personnalité"
 synapse.chat.input_area.tone.aria_label: "Choisir une personnalité"

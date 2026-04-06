@@ -1,4 +1,5 @@
 import { Controller } from '@hotwired/stimulus';
+import { escapeHtml, formatDate } from '../helpers.js';
 
 /**
  * Stimulus controller pour la sidebar de conversations
@@ -72,11 +73,11 @@ export default class extends Controller {
                 data-action="click->synapse-sidebar#selectConversation"
             >
                 <div class="conversation-header">
-                    <span class="conversation-title" data-synapse-sidebar-target="title">${this.escapeHtml(conv.title || 'Nouvelle conversation')}</span>
+                    <span class="conversation-title" data-synapse-sidebar-target="title">${escapeHtml(conv.title || 'Nouvelle conversation')}</span>
                     <!-- Risk badge removed - should only be visible in admin interface -->
                 </div>
                 <div class="conversation-meta">
-                    <span class="conversation-date">${this.formatDate(conv.updated_at)}</span>
+                    <span class="conversation-date">${formatDate(conv.updated_at)}</span>
                     <span class="conversation-count">${conv.message_count} msg</span>
                 </div>
                 <div class="conversation-actions">
@@ -366,11 +367,11 @@ export default class extends Controller {
                 data-action="click->synapse-sidebar#selectConversation"
             >
                 <div class="conversation-header">
-                    <span class="conversation-title" data-synapse-sidebar-target="title">${this.escapeHtml(conversation.title)}</span>
+                    <span class="conversation-title" data-synapse-sidebar-target="title">${escapeHtml(conversation.title)}</span>
                     <!-- Risk badge removed - should only be visible in admin interface -->
                 </div>
                 <div class="conversation-meta">
-                    <span class="conversation-date">${this.formatDate(conversation.updated_at)}</span>
+                    <span class="conversation-date">${formatDate(conversation.updated_at)}</span>
                     <span class="conversation-count">${conversation.message_count} msg</span>
                 </div>
                 <div class="conversation-actions">
@@ -418,26 +419,6 @@ export default class extends Controller {
     }
 
     /**
-     * Formate une date
-     */
-    formatDate(dateString) {
-        const date = new Date(dateString);
-        const now = new Date();
-        const diff = now - date;
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-        if (days === 0) {
-            return 'Aujourd\'hui';
-        } else if (days === 1) {
-            return 'Hier';
-        } else if (days < 7) {
-            return `Il y a ${days}j`;
-        } else {
-            return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-        }
-    }
-
-    /**
      * Retourne l'emoji d'un niveau de risque
      */
     getRiskEmoji(level) {
@@ -448,14 +429,6 @@ export default class extends Controller {
         return emojis[level] || '';
     }
 
-    /**
-     * Échappe le HTML
-     */
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 
     /**
      * Crée une nouvelle conversation (recharge la page sans conversation ID)

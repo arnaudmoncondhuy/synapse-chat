@@ -9,6 +9,7 @@ use ArnaudMoncondhuy\SynapseCore\Engine\ChatService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
@@ -38,7 +39,7 @@ class ResetController extends AbstractController
         if ($this->getParameter('synapse.security.api_csrf_enabled') && $this->csrfTokenManager) {
             $token = $request->headers->get('X-CSRF-Token') ?? $request->request->get('_csrf_token');
             if (!$this->isCsrfTokenValid('synapse_api', (string) $token)) {
-                return $this->json(['error' => 'Invalid CSRF token.'], 403);
+                throw new AccessDeniedHttpException('Invalid CSRF token.');
             }
         }
 

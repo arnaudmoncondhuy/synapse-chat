@@ -1,4 +1,5 @@
 import { Controller } from '@hotwired/stimulus';
+import { escapeHtml, formatDate } from '../helpers.js';
 
 /**
  * Synapse Chat Controller V2 (Minimalist Organic)
@@ -9,13 +10,15 @@ import { Controller } from '@hotwired/stimulus';
 export default class extends Controller {
     static targets = [
         // Zone Chat Principal
-        'messages', 'input', 'submitBtn', 'greeting',
+        'messages', 'input', 'submitBtn', 'greeting', 'conversationTitle',
         'agentPicker', 'agentTrigger', 'agentMenu', 'currentAgentEmoji', 'currentAgentName', 'agentInput',
         'tonePicker', 'toneTrigger', 'toneMenu', 'currentToneEmoji', 'currentToneName', 'toneInput',
         // Vision
-        'attachBtn', 'fileInput', 'imagePreview',
+        'attachBtn', 'fileInput', 'attachmentPreview',
         // Zone Sidebar
         'sidebar', 'sidebarOverlay', 'conversationsList', 'conversationsEmpty',
+        // Colonne droite (réflexion interne workflow)
+        'aside',
         // Onglets et mémoire
         'tabConversations', 'tabMemory', 'panelConversations', 'panelMemory',
         'memoryInput', 'memoryList', 'memoryEmpty'
@@ -36,6 +39,7 @@ export default class extends Controller {
         currentConversationId: String,
         debug: { type: Boolean, default: false },
         supportsVision: { type: Boolean, default: false },
+        acceptedMimeTypes: { type: Array, default: [] },
         attachmentUrlTemplate: { type: String, default: '/synapse/attachment/ATTACHMENT_ID' }
     };
 
@@ -70,12 +74,13 @@ export default class extends Controller {
         // Charger l'agent persistant
         this.loadPersistentAgent();
 
-        // Vision : tableau des images en attente d'envoi
-        this.pendingImages = [];
+        // Pièces jointes en attente d'envoi (images, PDF, etc.)
+        this.pendingFiles = [];
+        this.updateSendButton();
 
         // Lightbox : clic sur les images du chat pour les voir en grand
         this.onImageClick = (e) => {
-            const img = e.target.closest('.synapse-chat-message-images img, .synapse-chat-input-images img');
+            const img = e.target.closest('.synapse-chat-message-attachments img, .synapse-chat-input-images img');
             if (!img) return;
             this.openLightbox(img.src);
         };
@@ -99,18 +104,32 @@ export default class extends Controller {
 
     toggleSidebar() {
         if (!this.hasSidebarTarget) return;
-        this.sidebarTarget.classList.toggle('is-open');
-        if (this.hasSidebarOverlayTarget) {
-            this.sidebarOverlayTarget.classList.toggle('is-visible');
+
+        if (this._isMobile()) {
+            this.sidebarTarget.classList.toggle('is-open');
+            if (this.hasSidebarOverlayTarget) {
+                this.sidebarOverlayTarget.classList.toggle('is-visible');
+            }
+        } else {
+            this.sidebarTarget.classList.toggle('is-collapsed');
         }
     }
 
     closeSidebar() {
         if (!this.hasSidebarTarget) return;
-        this.sidebarTarget.classList.remove('is-open');
-        if (this.hasSidebarOverlayTarget) {
-            this.sidebarOverlayTarget.classList.remove('is-visible');
+
+        if (this._isMobile()) {
+            this.sidebarTarget.classList.remove('is-open');
+            if (this.hasSidebarOverlayTarget) {
+                this.sidebarOverlayTarget.classList.remove('is-visible');
+            }
+        } else {
+            this.sidebarTarget.classList.add('is-collapsed');
         }
+    }
+
+    _isMobile() {
+        return window.innerWidth <= 800;
     }
 
     /* ── 1.5. ONGLET CONVERSATIONS / MÉMOIRE ───────────────────────── */
@@ -186,9 +205,9 @@ export default class extends Controller {
                 <div class="synapse-chat-conv-item ${isActive ? 'is-active' : ''}" 
                      data-conversation-id="${conv.id}"
                      data-action="click->${this.identifier}#selectConversation">
-                    <div class="synapse-chat-conv-item__title" data-title-target="true">${this.escapeHtml(conv.title || 'Nouvelle conversation')}</div>
+                    <div class="synapse-chat-conv-item__title" data-title-target="true">${escapeHtml(conv.title || 'Nouvelle conversation')}</div>
                     <div class="synapse-chat-conv-item__meta">
-                        <span>${this.formatDate(conv.updated_at)}</span>
+                        <span>${formatDate(conv.updated_at)}</span>
                     </div>
                     
                     <div class="synapse-chat-conv-actions">
@@ -205,6 +224,14 @@ export default class extends Controller {
 
         if (this.hasConversationsListTarget) {
             this.conversationsListTarget.innerHTML = html;
+        }
+
+        // Mettre à jour le titre du header avec la conversation active
+        if (this.hasConversationTitleTarget && this.currentConversationIdValue) {
+            const active = conversations.find(c => String(c.id) === String(this.currentConversationIdValue));
+            if (active && active.title) {
+                this.conversationTitleTarget.textContent = active.title;
+            }
         }
     }
 
@@ -306,6 +333,13 @@ export default class extends Controller {
         const textarea = event ? event.target : this.inputTarget;
         textarea.style.height = 'auto';
         textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+        this.updateSendButton();
+    }
+
+    updateSendButton() {
+        if (!this.hasSubmitBtnTarget || !this.hasInputTarget) return;
+        const hasContent = this.inputTarget.value.trim().length > 0 || this.pendingFiles.length > 0;
+        this.submitBtnTarget.disabled = !hasContent;
     }
 
     async newConversation(event) {
@@ -321,24 +355,25 @@ export default class extends Controller {
         if (event) event.preventDefault();
 
         const message = this.inputTarget.value.trim();
-        const hasImages = this.pendingImages.length > 0;
-        if (!message && !hasImages) return;
+        const hasFiles = this.pendingFiles.length > 0;
+        if (!message && !hasFiles) return;
 
         // Passage du mode Accueil (Welcome) au mode Chat Actif
         this.element.classList.remove('synapse-chat-mode-welcome');
         this.element.classList.add('synapse-chat-mode-active');
         if (this.hasGreetingTarget) this.greetingTarget.classList.add('synapse-hidden');
 
-        // Ajouter message utilisateur (avec preview images éventuelles)
-        const imagesToSend = [...this.pendingImages];
-        this.addMessage(message, 'user', { images: imagesToSend });
+        // Ajouter message utilisateur (avec preview pièces jointes éventuelles)
+        const filesToSend = [...this.pendingFiles];
+        this.addMessage(message, 'user', { attachments: filesToSend });
 
-        // Reset l'input et les images
+        // Reset l'input et les pièces jointes
         this.inputTarget.value = '';
         this.inputTarget.style.height = 'auto';
-        this.clearPendingImages();
+        this.clearPendingFiles();
         this.setLoading(true);
         this.pendingMemoryProposal = null;
+        this.clearWorkflowSteps();
 
         const tone = this.hasToneInputTarget ? this.toneInputTarget.value : null;
         const agent = this.hasAgentInputTarget ? this.agentInputTarget.value : null;
@@ -353,8 +388,8 @@ export default class extends Controller {
                 options: { tone: tone, ...(agent ? { agent: agent } : {}) },
                 debug: this.isDebugMode
             };
-            if (imagesToSend.length > 0) {
-                payload.images = imagesToSend.map(img => ({ mime_type: img.mime_type, data: img.data }));
+            if (filesToSend.length > 0) {
+                payload.attachments = filesToSend.map(f => ({ mime_type: f.mime_type, data: f.data, name: f.name }));
             }
 
             const response = await fetch(this.chatUrlValue || '/synapse/api/chat', {
@@ -447,10 +482,10 @@ export default class extends Controller {
 
                                 // Afficher les images générées par le LLM
                                 if (currentMessageBubble && evt.payload?.generated_attachments?.length > 0) {
-                                    const imagesHtml = '<div class="synapse-chat-message-images">' +
+                                    const imagesHtml = '<div class="synapse-chat-message-attachments">' +
                                         evt.payload.generated_attachments.map(att => {
                                             const url = this.attachmentUrlTemplateValue.replace('ATTACHMENT_ID', att.uuid);
-                                            return `<img src="${url}" alt="Image générée" class="synapse-chat-generated-image">`;
+                                            return this._renderAttachmentBadge(att.mime_type || 'image/png', url, att.display_name);
                                         }).join('') +
                                         '</div>';
                                     currentMessageBubble.insertAdjacentHTML('afterbegin', imagesHtml);
@@ -462,12 +497,19 @@ export default class extends Controller {
                                 // Titre auto-généré reçu
                                 if (evt.payload?.title) {
                                     this.updateSidebarConversationTitle(this.currentConversationIdValue, evt.payload.title);
+                                    if (this.hasConversationTitleTarget) {
+                                        this.conversationTitleTarget.textContent = evt.payload.title;
+                                    }
                                 }
                             } else if (evt.type === 'error') {
                                 streamErrorMessage = typeof evt.payload === 'string' ? evt.payload : (evt.payload?.message || "Erreur interne.");
                                 receivedResult = true;
                                 if (timeoutId) clearTimeout(timeoutId);
                                 break streamLoop;
+                            } else if (evt.type === 'workflow_step_started') {
+                                this.renderWorkflowStepStarted(evt.payload);
+                            } else if (evt.type === 'workflow_step') {
+                                this.renderWorkflowStepCompleted(evt.payload);
                             } else if (evt.type === 'tool_executed') {
                                 if (evt.payload?.tool === 'propose_to_remember' && evt.payload?.proposal) {
                                     this.pendingMemoryProposal = {
@@ -507,12 +549,17 @@ export default class extends Controller {
         }
     }
 
-    /* ── VISION : Gestion des images attachées ──────────────────────────── */
+    /* ── Gestion des pièces jointes (images, PDF, etc.) ─────────────────── */
 
-    attachImage() {
+    attachFile() {
         if (this.hasFileInputTarget) {
             this.fileInputTarget.click();
         }
+    }
+
+    /** @deprecated Utiliser attachFile() */
+    attachImage() {
+        this.attachFile();
     }
 
     async handleFileInput() {
@@ -520,12 +567,13 @@ export default class extends Controller {
         const files = Array.from(this.fileInputTarget.files);
         this.fileInputTarget.value = ''; // Reset pour permettre de re-sélectionner le même fichier
 
+        const allowed = this.acceptedMimeTypesValue;
         for (const file of files) {
-            if (!file.type.startsWith('image/')) continue;
+            if (allowed.length > 0 && !allowed.includes(file.type)) continue;
             const data = await this.fileToBase64(file);
-            this.pendingImages.push({ mime_type: file.type, data, name: file.name });
+            this.pendingFiles.push({ mime_type: file.type, data, name: file.name });
         }
-        this.renderImagePreview();
+        this.renderFilePreview();
     }
 
     fileToBase64(file) {
@@ -541,37 +589,56 @@ export default class extends Controller {
         });
     }
 
-    renderImagePreview() {
-        if (!this.hasImagePreviewTarget) return;
-        const container = this.imagePreviewTarget;
+    renderFilePreview() {
+        if (!this.hasAttachmentPreviewTarget) return;
+        const container = this.attachmentPreviewTarget;
 
-        if (this.pendingImages.length === 0) {
+        if (this.pendingFiles.length === 0) {
             container.classList.add('synapse-hidden');
             container.innerHTML = '';
+            this.updateSendButton();
             return;
         }
 
         container.classList.remove('synapse-hidden');
-        container.innerHTML = this.pendingImages.map((img, index) => `
-            <div class="synapse-chat-image-preview__item">
-                <img src="data:${img.mime_type};base64,${img.data}" alt="${img.name}">
-                <button type="button" class="synapse-chat-image-preview__remove"
-                    data-action="click->${this.identifier}#removeImage"
-                    data-index="${index}"
-                    aria-label="Supprimer">×</button>
-            </div>
-        `).join('');
+        container.innerHTML = this.pendingFiles.map((file, index) => {
+            const badge = this._renderAttachmentBadge(
+                file.mime_type,
+                `data:${file.mime_type};base64,${file.data}`,
+                file.name
+            );
+            return `
+                <div class="synapse-chat-attachment-preview__item">
+                    ${badge}
+                    <button type="button" class="synapse-chat-attachment-preview__remove"
+                        data-action="click->${this.identifier}#removeFile"
+                        data-index="${index}"
+                        aria-label="Supprimer">×</button>
+                </div>
+            `;
+        }).join('');
+        this.updateSendButton();
     }
 
-    removeImage(event) {
+    removeFile(event) {
         const index = parseInt(event.currentTarget.dataset.index, 10);
-        this.pendingImages.splice(index, 1);
-        this.renderImagePreview();
+        this.pendingFiles.splice(index, 1);
+        this.renderFilePreview();
     }
 
+    /** @deprecated Utiliser removeFile() */
+    removeImage(event) {
+        this.removeFile(event);
+    }
+
+    clearPendingFiles() {
+        this.pendingFiles = [];
+        this.renderFilePreview();
+    }
+
+    /** @deprecated Utiliser clearPendingFiles() */
     clearPendingImages() {
-        this.pendingImages = [];
-        this.renderImagePreview();
+        this.clearPendingFiles();
     }
 
     openLightbox(src) {
@@ -619,17 +686,21 @@ export default class extends Controller {
                 `;
             }
 
-            let imagePreviewHtml = '';
-            if (role === 'user' && metadata?.images?.length > 0) {
-                imagePreviewHtml = '<div class="synapse-chat-message-images">' +
-                    metadata.images.map(img => `<img src="data:${img.mime_type};base64,${img.data}" alt="Image attachée">`).join('') +
+            let attachmentPreviewHtml = '';
+            if (role === 'user' && metadata?.attachments?.length > 0) {
+                attachmentPreviewHtml = '<div class="synapse-chat-message-attachments">' +
+                    metadata.attachments.map(file => this._renderAttachmentBadge(
+                        file.mime_type,
+                        `data:${file.mime_type};base64,${file.data}`,
+                        file.name
+                    )).join('') +
                     '</div>';
             }
             html = `
                 <div class="synapse-chat-message synapse-chat-message--${role}">
                     ${avatarContent}
                     <div class="synapse-chat-message__content">
-                        <div class="synapse-chat-bubble">${imagePreviewHtml}${formattedText}</div>
+                        <div class="synapse-chat-bubble">${attachmentPreviewHtml}${formattedText}</div>
                         ${debugButton}
                     </div>
                 </div>
@@ -708,7 +779,7 @@ export default class extends Controller {
                 <div class="synapse-chat-message__content">
                     <div class="synapse-chat-memory-encart">
                         <span class="synapse-chat-memory-encart__label">Mémoire :</span>
-                        <span class="synapse-chat-memory-encart__fact">${this.escapeHtml(fact)}</span>
+                        <span class="synapse-chat-memory-encart__fact">${escapeHtml(fact)}</span>
                         <button type="button" class="synapse-chat-memory-encart__btn" data-action-type="reject">Oublier</button>
                         <button type="button" class="synapse-chat-memory-encart__btn" data-action-type="confirm-conv">Retenir (cette discussion)</button>
                         <button type="button" class="synapse-chat-memory-encart__btn" data-action-type="confirm-user" style="color:var(--synapse-chat-primary);border-color:var(--synapse-chat-primary);">Mémoriser</button>
@@ -750,6 +821,9 @@ export default class extends Controller {
                 encart.classList.add('synapse-chat-memory-encart--success');
                 encart.innerHTML = `✅ Sauvegardé dans la mémoire (${scope === 'user' ? 'Générale' : 'Discussion courante'}).`;
                 setTimeout(() => { lastMsg.remove(); }, 3000);
+
+                // Basculer sur l'onglet Mémoire pour montrer le nouveau souvenir
+                this.showMemoryTab();
 
                 if (data.feedback_message) {
                     this.addMessage(data.feedback_message, 'user', { subtype: 'system_action' });
@@ -797,9 +871,9 @@ export default class extends Controller {
             const scopeLabel = mem.scope === 'conversation' ? 'Discussion' : 'Général';
             return `
                 <div class="synapse-memory-item" data-memory-id="${mem.id}">
-                    <div class="synapse-memory-item__content" data-memory-text-target="true">${this.escapeHtml(mem.content)}</div>
+                    <div class="synapse-memory-item__content" data-memory-text-target="true">${escapeHtml(mem.content)}</div>
                     <div class="synapse-memory-item__meta">
-                        <span>${this.formatDate(mem.created_at)}</span>
+                        <span>${formatDate(mem.created_at)}</span>
                         <span>${scopeLabel}</span>
                     </div>
                     
@@ -813,7 +887,7 @@ export default class extends Controller {
                     </div>
 
                     <div class="synapse-memory-edit-form">
-                        <textarea class="synapse-memory-edit-input" data-memory-input-target="true">${this.escapeHtml(mem.content)}</textarea>
+                        <textarea class="synapse-memory-edit-input" data-memory-input-target="true">${escapeHtml(mem.content)}</textarea>
                         <div class="synapse-memory-edit-actions">
                             <button type="button" class="synapse-memory-edit-btn synapse-memory-edit-btn--cancel" data-action="click->${this.identifier}#cancelEditMemory">Annuler</button>
                             <button type="button" class="synapse-memory-edit-btn synapse-memory-edit-btn--save" data-action="click->${this.identifier}#saveMemory">Enregistrer</button>
@@ -1061,8 +1135,9 @@ export default class extends Controller {
     /* ── 5. UTILITAIRES & MARKDOWN ─────────────────────────────────────────── */
 
     scrollToBottom() {
-        if (this.hasMessagesTarget) {
-            this.messagesTarget.scrollTop = this.messagesTarget.scrollHeight;
+        const scrollContainer = this.element.querySelector('.synapse-chat-main');
+        if (scrollContainer) {
+            scrollContainer.scrollTop = scrollContainer.scrollHeight;
         }
     }
 
@@ -1087,22 +1162,6 @@ export default class extends Controller {
             const titleTarget = item.querySelector('[data-title-target="true"]');
             if (titleTarget) titleTarget.textContent = title;
         }
-    }
-
-    escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    formatDate(dateString) {
-        const date = new Date(dateString);
-        const diff = Date.now() - date;
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        if (days === 0) return 'Aujourd\'hui';
-        if (days === 1) return 'Hier';
-        if (days < 7) return `Il y a ${days} j`;
-        return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
     }
 
     async ensureCsrfToken() {
@@ -1142,4 +1201,160 @@ export default class extends Controller {
         html = html.replace(/\n/g, '<br>');
         return html;
     }
+
+    /**
+     * Rendu unifié d'un badge pièce jointe (miroir JS du partial Twig _attachment_badge.html.twig).
+     * @param {string} mimeType - Type MIME (ex: 'image/png', 'application/pdf')
+     * @param {string} url - URL de la ressource (data URI ou route servie)
+     * @param {string|null} name - Nom d'affichage
+     * @returns {string} HTML du badge
+     */
+    _renderAttachmentBadge(mimeType, url, name = null) {
+        if (mimeType.startsWith('image/')) {
+            return `<img src="${url}" alt="${name || 'Image'}" style="max-width: 300px; border-radius: 8px; border: 1px solid #bae6fd;" loading="lazy">`;
+        }
+
+        const configs = {
+            'application/pdf': { bg: '#fef3c7', border: '#f59e0b', color: '#92400e', label: 'PDF', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>' },
+            'text/': { bg: '#e0f2fe', border: '#38bdf8', color: '#0c4a6e', label: 'Texte', icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/>' },
+            'audio/': { bg: '#f3e8ff', border: '#a78bfa', color: '#5b21b6', label: 'Audio', icon: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>' },
+            'video/': { bg: '#fce7f3', border: '#f472b6', color: '#9d174d', label: 'Vidéo', icon: '<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>' },
+        };
+
+        const cfg = configs[mimeType]
+            || Object.entries(configs).find(([k]) => k.endsWith('/') && mimeType.startsWith(k))?.[1]
+            || { bg: '#f1f5f9', border: '#94a3b8', color: '#475569', label: mimeType, icon: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>' };
+
+        const displayName = name || cfg.label;
+        const svg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${cfg.icon}</svg>`;
+        const style = `display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: ${cfg.bg}; border: 1px solid ${cfg.border}; border-radius: 6px; font-size: 0.85rem; color: ${cfg.color}; text-decoration: none;`;
+
+        if (url.startsWith('data:')) {
+            return `<span style="${style}">${svg} ${displayName}</span>`;
+        }
+        return `<a href="${url}" style="${style}" target="_blank" rel="noopener">${svg} ${displayName}</a>`;
+    }
+
+    // ── Workflow Sidebar ("Réflexion interne") ──────────────────────────────
+
+    /**
+     * Ouvre la sidebar workflow si nécessaire et retourne le container des steps.
+     */
+    _ensureWorkflowAside() {
+        if (!this.hasAsideTarget) return null;
+
+        const aside = this.asideTarget;
+
+        if (!aside.classList.contains('synapse-chat-aside--open')) {
+            aside.classList.add('synapse-chat-aside--open');
+            aside.innerHTML = `
+                <div class="synapse-workflow-header">
+                    <div class="synapse-workflow-header__icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 6v6l4 2"/></svg>
+                    </div>
+                    <span class="synapse-workflow-header__title">Réflexion interne</span>
+                    <button type="button" class="synapse-workflow-header__close" aria-label="Fermer">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                </div>
+                <div class="synapse-workflow-steps"></div>
+            `;
+            aside.querySelector('.synapse-workflow-header__close')?.addEventListener('click', () => {
+                this.clearWorkflowSteps();
+            });
+        }
+
+        return aside.querySelector('.synapse-workflow-steps');
+    }
+
+    /**
+     * Affiche un step en état "réflexion en cours" dès que le backend commence à l'exécuter.
+     */
+    renderWorkflowStepStarted(payload) {
+        const container = this._ensureWorkflowAside();
+        if (!container) return;
+
+        const stepNum = payload.stepIndex + 1;
+        const total = payload.totalSteps;
+
+        const stepEl = document.createElement('div');
+        stepEl.className = 'synapse-workflow-step synapse-workflow-step--appear synapse-workflow-step--thinking';
+        stepEl.setAttribute('data-step-index', payload.stepIndex);
+        stepEl.innerHTML = `
+            <div class="synapse-workflow-step__header">
+                <span class="synapse-workflow-step__badge">${stepNum}/${total}</span>
+                <span class="synapse-workflow-step__name">${escapeHtml(payload.stepName)}</span>
+                <span class="synapse-workflow-step__agent">${escapeHtml(payload.agentName)}</span>
+            </div>
+            <div class="synapse-workflow-step__answer synapse-workflow-step__answer--thinking">
+                <span class="synapse-workflow-step__spinner"></span>
+                Réflexion en cours…
+            </div>
+        `;
+        container.appendChild(stepEl);
+
+        requestAnimationFrame(() => stepEl.classList.add('synapse-workflow-step--visible'));
+        this.asideTarget.scrollTop = this.asideTarget.scrollHeight;
+    }
+
+    /**
+     * Met à jour un step existant avec la réponse finale (remplace le spinner).
+     */
+    renderWorkflowStepCompleted(payload) {
+        const container = this._ensureWorkflowAside();
+        if (!container) return;
+
+        const tokens = payload.usage?.total_tokens ?? 0;
+
+        let answerPreview = payload.answer || '';
+        if (answerPreview.length > 200) {
+            answerPreview = answerPreview.substring(0, 200) + '…';
+        }
+
+        // Retrouver le step "thinking" existant par son index
+        const existingStep = container.querySelector(`[data-step-index="${payload.stepIndex}"]`);
+        if (existingStep) {
+            existingStep.classList.remove('synapse-workflow-step--thinking');
+            existingStep.classList.add('synapse-workflow-step--done');
+            const answerEl = existingStep.querySelector('.synapse-workflow-step__answer');
+            if (answerEl) {
+                answerEl.classList.remove('synapse-workflow-step__answer--thinking');
+                answerEl.innerHTML = escapeHtml(answerPreview);
+            }
+            // Ajouter les tokens
+            if (tokens > 0) {
+                const tokensEl = document.createElement('div');
+                tokensEl.className = 'synapse-workflow-step__tokens';
+                tokensEl.textContent = `${tokens} tokens`;
+                existingStep.appendChild(tokensEl);
+            }
+        } else {
+            // Fallback : si le step_started n'a pas été reçu, créer le bloc complet
+            const stepNum = payload.stepIndex + 1;
+            const total = payload.totalSteps;
+            const stepEl = document.createElement('div');
+            stepEl.className = 'synapse-workflow-step synapse-workflow-step--appear synapse-workflow-step--done';
+            stepEl.setAttribute('data-step-index', payload.stepIndex);
+            stepEl.innerHTML = `
+                <div class="synapse-workflow-step__header">
+                    <span class="synapse-workflow-step__badge">${stepNum}/${total}</span>
+                    <span class="synapse-workflow-step__name">${escapeHtml(payload.stepName)}</span>
+                    <span class="synapse-workflow-step__agent">${escapeHtml(payload.agentName)}</span>
+                </div>
+                <div class="synapse-workflow-step__answer">${escapeHtml(answerPreview)}</div>
+                ${tokens > 0 ? `<div class="synapse-workflow-step__tokens">${tokens} tokens</div>` : ''}
+            `;
+            container.appendChild(stepEl);
+            requestAnimationFrame(() => stepEl.classList.add('synapse-workflow-step--visible'));
+        }
+
+        this.asideTarget.scrollTop = this.asideTarget.scrollHeight;
+    }
+
+    clearWorkflowSteps() {
+        if (!this.hasAsideTarget) return;
+        this.asideTarget.classList.remove('synapse-chat-aside--open');
+        this.asideTarget.innerHTML = '';
+    }
+
 }
