@@ -11,9 +11,15 @@ use ArnaudMoncondhuy\SynapseCore\AgentRegistry;
 use ArnaudMoncondhuy\SynapseCore\Contract\ConversationOwnerInterface;
 use ArnaudMoncondhuy\SynapseCore\Contract\PermissionCheckerInterface;
 use ArnaudMoncondhuy\SynapseCore\Engine\ChatService;
+use ArnaudMoncondhuy\SynapseCore\Event\SynapseChunkReceivedEvent;
+use ArnaudMoncondhuy\SynapseCore\Event\SynapseMemoryResultsEvent;
+use ArnaudMoncondhuy\SynapseCore\Event\SynapseMultiTurnIterationEvent;
+use ArnaudMoncondhuy\SynapseCore\Event\SynapseRagResultsEvent;
 use ArnaudMoncondhuy\SynapseCore\Event\SynapseStatusChangedEvent;
 use ArnaudMoncondhuy\SynapseCore\Event\SynapseTokenStreamedEvent;
 use ArnaudMoncondhuy\SynapseCore\Event\SynapseToolCallCompletedEvent;
+use ArnaudMoncondhuy\SynapseCore\Event\SynapseToolCallStartedEvent;
+use ArnaudMoncondhuy\SynapseCore\Event\SynapseUsageRecordedEvent;
 use ArnaudMoncondhuy\SynapseCore\Event\SynapseWorkflowStepCompletedEvent;
 use ArnaudMoncondhuy\SynapseCore\Event\SynapseWorkflowStepStartedEvent;
 use ArnaudMoncondhuy\SynapseCore\Formatter\MessageFormatter;
@@ -53,6 +59,7 @@ class ChatApiController extends AbstractController
         private readonly ?CsrfTokenManagerInterface $csrfTokenManager = null,
         private readonly ?\ArnaudMoncondhuy\SynapseCore\Accounting\TokenCostEstimator $tokenCostEstimator = null,
         private readonly ?TranslatorInterface $translator = null,
+        private readonly ?\ArnaudMoncondhuy\SynapseCore\Engine\ToolRegistry $toolRegistry = null,
     ) {
     }
 
@@ -227,6 +234,73 @@ class ChatApiController extends AbstractController
                             'conversation_id' => $conversation?->getId(),
                         ]);
                     }
+                    // Transparency sidebar: tool completed
+                    $resultRaw = $e->getResult();
+                    $resultPreview = \is_string($resultRaw) ? mb_substr($resultRaw, 0, 200) : mb_substr((string) json_encode($resultRaw, \JSON_UNESCAPED_UNICODE), 0, 200);
+                    $sendEvent('tool_completed', [
+                        'toolName' => $e->getToolName(),
+                        'resultPreview' => $resultPreview,
+                    ]);
+                };
+                // Transparency: thinking tokens
+                $thinkingListener = function (SynapseChunkReceivedEvent $e) use ($sendEvent, $workflowModeRef): void {
+                    if ($workflowModeRef->active) {
+                        return;
+                    }
+                    $thinking = $e->getThinking();
+                    if (null !== $thinking && '' !== $thinking) {
+                        $sendEvent('thinking_delta', ['text' => $thinking]);
+                    }
+                };
+                // Transparency: tool call started
+                $toolStartedListener = function (SynapseToolCallStartedEvent $e) use ($sendEvent): void {
+                    $sendEvent('tool_started', [
+                        'toolName' => $e->toolName,
+                        'toolLabel' => $e->toolLabel,
+                        'arguments' => $e->arguments,
+                        'toolCallId' => $e->toolCallId,
+                        'turn' => $e->turn,
+                    ]);
+                };
+                // Transparency: multi-turn iteration
+                $turnIterationListener = function (SynapseMultiTurnIterationEvent $e) use ($sendEvent): void {
+                    $tools = array_map(function (array $t): array {
+                        $t['label'] = $this->toolRegistry?->getLabel($t['name']) ?? $t['name'];
+
+                        return $t;
+                    }, $e->toolCallsSummary);
+                    $sendEvent('turn_iteration', [
+                        'turn' => $e->turn,
+                        'maxTurns' => $e->maxTurns,
+                        'tools' => $tools,
+                        'usage' => $e->usage,
+                    ]);
+                };
+                // Transparency: RAG results
+                $ragResultsListener = function (SynapseRagResultsEvent $e) use ($sendEvent): void {
+                    $sendEvent('rag_context', [
+                        'results' => $e->results,
+                        'totalInjected' => $e->totalInjected,
+                        'tokenEstimate' => $e->tokenEstimate,
+                    ]);
+                };
+                // Transparency: memory recalled
+                $memoryResultsListener = function (SynapseMemoryResultsEvent $e) use ($sendEvent): void {
+                    $sendEvent('memory_recalled', [
+                        'memories' => $e->memories,
+                        'totalRecalled' => $e->totalRecalled,
+                    ]);
+                };
+                // Transparency: usage/cost update
+                $usageListener = function (SynapseUsageRecordedEvent $e) use ($sendEvent): void {
+                    $sendEvent('usage_update', [
+                        'model' => $e->getModel(),
+                        'promptTokens' => $e->getPromptTokens(),
+                        'completionTokens' => $e->getCompletionTokens(),
+                        'thinkingTokens' => $e->getThinkingTokens(),
+                        'imageTokens' => $e->getImageCompletionTokens(),
+                        'cost' => $e->getCostInReferenceCurrency(),
+                    ]);
                 };
                 $workflowStepStartedListener = function (SynapseWorkflowStepStartedEvent $e) use ($sendEvent): void {
                     $sendEvent('workflow_step_started', [
@@ -251,6 +325,12 @@ class ChatApiController extends AbstractController
                 $this->dispatcher->addListener(SynapseStatusChangedEvent::class, $statusListener);
                 $this->dispatcher->addListener(SynapseTokenStreamedEvent::class, $tokenListener);
                 $this->dispatcher->addListener(SynapseToolCallCompletedEvent::class, $toolListener);
+                $this->dispatcher->addListener(SynapseChunkReceivedEvent::class, $thinkingListener);
+                $this->dispatcher->addListener(SynapseToolCallStartedEvent::class, $toolStartedListener);
+                $this->dispatcher->addListener(SynapseMultiTurnIterationEvent::class, $turnIterationListener);
+                $this->dispatcher->addListener(SynapseRagResultsEvent::class, $ragResultsListener);
+                $this->dispatcher->addListener(SynapseMemoryResultsEvent::class, $memoryResultsListener);
+                $this->dispatcher->addListener(SynapseUsageRecordedEvent::class, $usageListener);
                 $this->dispatcher->addListener(SynapseWorkflowStepStartedEvent::class, $workflowStepStartedListener);
                 $this->dispatcher->addListener(SynapseWorkflowStepCompletedEvent::class, $workflowStepListener);
 
@@ -364,6 +444,12 @@ class ChatApiController extends AbstractController
                     $this->dispatcher->removeListener(SynapseStatusChangedEvent::class, $statusListener);
                     $this->dispatcher->removeListener(SynapseTokenStreamedEvent::class, $tokenListener);
                     $this->dispatcher->removeListener(SynapseToolCallCompletedEvent::class, $toolListener);
+                    $this->dispatcher->removeListener(SynapseChunkReceivedEvent::class, $thinkingListener);
+                    $this->dispatcher->removeListener(SynapseToolCallStartedEvent::class, $toolStartedListener);
+                    $this->dispatcher->removeListener(SynapseMultiTurnIterationEvent::class, $turnIterationListener);
+                    $this->dispatcher->removeListener(SynapseRagResultsEvent::class, $ragResultsListener);
+                    $this->dispatcher->removeListener(SynapseMemoryResultsEvent::class, $memoryResultsListener);
+                    $this->dispatcher->removeListener(SynapseUsageRecordedEvent::class, $usageListener);
                     $this->dispatcher->removeListener(SynapseWorkflowStepStartedEvent::class, $workflowStepStartedListener);
                     $this->dispatcher->removeListener(SynapseWorkflowStepCompletedEvent::class, $workflowStepListener);
                 }
@@ -437,6 +523,11 @@ class ChatApiController extends AbstractController
                 // Add conversation_id to result
                 if ($conversation) {
                     $result['conversation_id'] = $conversation->getId();
+                }
+
+                // Transparency: send artifacts for sidebar
+                if (!empty($result['generated_attachments'])) {
+                    $sendEvent('artifacts', ['items' => $result['generated_attachments']]);
                 }
 
                 // Send final result

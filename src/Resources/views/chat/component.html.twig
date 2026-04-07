@@ -135,6 +135,10 @@
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
             </button>
             <span class="synapse-chat-main__title" data-{{ controller_override }}-target="conversationTitle">{{ 'synapse.chat.header.default_title'|trans(domain='synapse_chat') }}</span>
+            <button type="button" class="synapse-chat-btn synapse-chat-btn--icon synapse-chat-artifacts-btn synapse-hidden" data-{{ controller_override }}-target="artifactsBtn" data-action="click->{{ controller_override }}#showArtifacts" aria-label="{{ 'synapse.chat.transparency.artifacts_btn'|trans(domain='synapse_chat') }}" title="{{ 'synapse.chat.transparency.artifacts_btn'|trans(domain='synapse_chat') }}">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <span class="synapse-chat-artifacts-btn__count" data-{{ controller_override }}-target="artifactsCount"></span>
+            </button>
             <div class="synapse-chat-main__header-spacer"></div>
         </header>
 

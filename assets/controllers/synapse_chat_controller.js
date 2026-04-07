@@ -19,6 +19,8 @@ export default class extends Controller {
         'sidebar', 'sidebarOverlay', 'conversationsList', 'conversationsEmpty',
         // Colonne droite (réflexion interne workflow)
         'aside',
+        // Bouton artefacts (top bar)
+        'artifactsBtn', 'artifactsCount',
         // Onglets et mémoire
         'tabConversations', 'tabMemory', 'panelConversations', 'panelMemory',
         'memoryInput', 'memoryList', 'memoryEmpty'
@@ -46,6 +48,11 @@ export default class extends Controller {
     connect() {
         this.scrollToBottom();
         this.inputTarget.focus();
+
+        // Artefacts persistants (accumulés sur toute la conversation)
+        this._allArtifacts = [];
+        this._loadExistingArtifacts();
+        this._updateArtifactsButton();
 
         // Écouteurs pour le textarea (auto-resize et Entrée = submit)
         this.onKeydown = this.handleKeydown.bind(this);
@@ -98,6 +105,7 @@ export default class extends Controller {
         if (this.hasMessagesTarget) {
             this.messagesTarget.removeEventListener('click', this.onImageClick);
         }
+        if (this._scrollRafId) cancelAnimationFrame(this._scrollRafId);
     }
 
     /* ── 1. GESTION DE LA SIDEBAR (MOBILE & LAYOUTS CONTRAINTS) ────── */
@@ -358,22 +366,19 @@ export default class extends Controller {
         const hasFiles = this.pendingFiles.length > 0;
         if (!message && !hasFiles) return;
 
-        // Passage du mode Accueil (Welcome) au mode Chat Actif
+        // Passage du mode Accueil au mode Chat Actif
         this.element.classList.remove('synapse-chat-mode-welcome');
         this.element.classList.add('synapse-chat-mode-active');
         if (this.hasGreetingTarget) this.greetingTarget.classList.add('synapse-hidden');
 
-        // Ajouter message utilisateur (avec preview pièces jointes éventuelles)
         const filesToSend = [...this.pendingFiles];
         this.addMessage(message, 'user', { attachments: filesToSend });
 
-        // Reset l'input et les pièces jointes
         this.inputTarget.value = '';
         this.inputTarget.style.height = 'auto';
         this.clearPendingFiles();
         this.setLoading(true);
-        this.pendingMemoryProposal = null;
-        this.clearWorkflowSteps();
+        this.closeTransparencyPanel();
 
         const tone = this.hasToneInputTarget ? this.toneInputTarget.value : null;
         const agent = this.hasAgentInputTarget ? this.agentInputTarget.value : null;
@@ -383,9 +388,8 @@ export default class extends Controller {
 
         try {
             const payload = {
-                message: message,
-                conversation_id: this.currentConversationIdValue,
-                options: { tone: tone, ...(agent ? { agent: agent } : {}) },
+                message, conversation_id: this.currentConversationIdValue,
+                options: { tone, ...(agent ? { agent } : {}) },
                 debug: this.isDebugMode
             };
             if (filesToSend.length > 0) {
@@ -393,159 +397,158 @@ export default class extends Controller {
             }
 
             const response = await fetch(this.chatUrlValue || '/synapse/api/chat', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(payload)
+                method: 'POST', headers, body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
-                let msg = `Erreur serveur (${response.status}).`;
-                if (response.status === 401) msg = 'Session expirée. Rechargez la page.';
+                const msg = response.status === 401 ? 'Session expirée. Rechargez la page.' : `Erreur serveur (${response.status}).`;
                 throw new Error(msg);
             }
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let currentResponseText = '';
-            let currentMessageBubble = null;
-            let streamErrorMessage = null;
-            let receivedResult = false;
-
-            // Timeout sécurité adaptatif
-            let timeoutId = null;
-            const resetTimeout = () => {
-                if (timeoutId) clearTimeout(timeoutId);
-                timeoutId = setTimeout(() => {
-                    if (!receivedResult) {
-                        reader.cancel();
-                        this.setLoading(false);
-                        this.addMessage('⏱️ Le serveur ne répond plus (Timeout).', 'assistant');
-                    }
-                }, 30000); // 30s de silence avant timeout
-            };
-
-            resetTimeout();
-
-            try {
-                streamLoop: while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    resetTimeout(); // On a reçu de la donnée, on repousse le timeout
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop(); // Garder ligne incomplète
-
-                    for (const line of lines) {
-                        const trimmedLine = line.trim();
-                        if (!trimmedLine.startsWith('{')) continue; // Ignorer le non-JSON
-
-                        try {
-                            const evt = JSON.parse(trimmedLine);
-                            if (!evt || typeof evt !== 'object' || !evt.type) continue;
-
-                            if (evt.type === 'delta') {
-                                if (!currentMessageBubble) {
-                                    this.setLoading(false);
-                                    this.addMessage('', 'assistant'); // Crée le conteneur vide
-                                    const messages = this.messagesTarget.querySelectorAll('.synapse-chat-message--assistant');
-                                    currentMessageBubble = messages[messages.length - 1].querySelector('.synapse-chat-bubble');
-                                }
-                                if (evt.payload && evt.payload.text) {
-                                    currentResponseText += evt.payload.text;
-                                    currentMessageBubble.innerHTML = this.parseMarkdown(currentResponseText);
-                                    this.scrollToBottom();
-                                }
-                            } else if (evt.type === 'result') {
-                                receivedResult = true;
-                                if (timeoutId) clearTimeout(timeoutId);
-                                this.setLoading(false);
-
-                                if (evt.payload?.conversation_id) {
-                                    this.updateUrlConversation(evt.payload.conversation_id);
-                                }
-
-                                if (currentMessageBubble && evt.payload?.answer) {
-                                    currentMessageBubble.innerHTML = this.parseMarkdown(evt.payload.answer);
-                                    if (this.debugValue && evt.payload?.debug_id) {
-                                        this.addDebugButtonToMessage(currentMessageBubble.closest('.synapse-chat-message'), evt.payload.debug_id);
-                                    }
-                                } else if (!currentMessageBubble && (evt.payload?.answer || evt.payload?.generated_attachments?.length > 0)) {
-                                    // Pas de streaming (image-only ou réponse directe) : créer le bubble
-                                    const displayText = evt.payload?.answer && evt.payload.answer !== '[image]' ? evt.payload.answer : '';
-                                    this.addMessage(displayText, 'assistant', { debug_id: evt.payload.debug_id });
-                                    const messages = this.messagesTarget.querySelectorAll('.synapse-chat-message--assistant');
-                                    currentMessageBubble = messages[messages.length - 1].querySelector('.synapse-chat-bubble');
-                                }
-
-                                // Afficher les images générées par le LLM
-                                if (currentMessageBubble && evt.payload?.generated_attachments?.length > 0) {
-                                    const imagesHtml = '<div class="synapse-chat-message-attachments">' +
-                                        evt.payload.generated_attachments.map(att => {
-                                            const url = this.attachmentUrlTemplateValue.replace('ATTACHMENT_ID', att.uuid);
-                                            return this._renderAttachmentBadge(att.mime_type || 'image/png', url, att.display_name);
-                                        }).join('') +
-                                        '</div>';
-                                    currentMessageBubble.insertAdjacentHTML('afterbegin', imagesHtml);
-                                }
-
-                            } else if (evt.type === 'status' && evt.payload?.message) {
-                                this.updateLoadingText(evt.payload.message);
-                            } else if (evt.type === 'title') {
-                                // Titre auto-généré reçu
-                                if (evt.payload?.title) {
-                                    this.updateSidebarConversationTitle(this.currentConversationIdValue, evt.payload.title);
-                                    if (this.hasConversationTitleTarget) {
-                                        this.conversationTitleTarget.textContent = evt.payload.title;
-                                    }
-                                }
-                            } else if (evt.type === 'error') {
-                                streamErrorMessage = typeof evt.payload === 'string' ? evt.payload : (evt.payload?.message || "Erreur interne.");
-                                receivedResult = true;
-                                if (timeoutId) clearTimeout(timeoutId);
-                                break streamLoop;
-                            } else if (evt.type === 'workflow_step_started') {
-                                this.renderWorkflowStepStarted(evt.payload);
-                            } else if (evt.type === 'workflow_step') {
-                                this.renderWorkflowStepCompleted(evt.payload);
-                            } else if (evt.type === 'tool_executed') {
-                                if (evt.payload?.tool === 'propose_to_remember' && evt.payload?.proposal) {
-                                    this.pendingMemoryProposal = {
-                                        proposal: evt.payload.proposal,
-                                        conversationId: evt.payload.conversation_id || this.currentConversationIdValue
-                                    };
-                                }
-                            }
-                        } catch (e) { /* Ligne partielle, on ignore silencieusement */ }
-                    }
-                } // End Stream loop
-
-                if (streamErrorMessage) {
-                    this.setLoading(false);
-                    this.addMessage('❌ ' + streamErrorMessage, 'assistant');
-                } else if (!receivedResult && currentResponseText === '') {
-                    this.setLoading(false);
-                    this.addMessage('⚠️ Réponse vide du serveur.', 'assistant');
-                }
-
-                // Afficher l'encart de mémorisation à la fin du message principal pour plus de cohérence
-                if (this.pendingMemoryProposal) {
-                    this.showMemoryProposal(this.pendingMemoryProposal.proposal, this.pendingMemoryProposal.conversationId);
-                    this.pendingMemoryProposal = null;
-                }
-            } finally {
-                clearTimeout(timeoutId);
-            }
+            await this._processStream(response.body.getReader());
 
         } catch (error) {
             this.setLoading(false);
+            this._markTransparencyError(error.message || 'Erreur réseau');
             this.addMessage('❌ ' + error.message, 'assistant');
             console.error('Erreur API Chat:', error);
         } finally {
             this.setLoading(false);
             this.inputTarget.focus();
+        }
+    }
+
+    // ── Stream processing ─────────────────────────────────────────────────
+
+    async _processStream(reader) {
+        const decoder = new TextDecoder();
+        let buffer = '';
+        const state = { text: '', bubble: null, error: null, done: false };
+
+        let timeoutId = null;
+        const resetTimeout = () => {
+            if (timeoutId) clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => {
+                if (!state.done) {
+                    reader.cancel();
+                    this.setLoading(false);
+                    this._markTransparencyError('Timeout — le serveur ne répond plus');
+                    this.addMessage('⏱️ Le serveur ne répond plus (Timeout).', 'assistant');
+                }
+            }, 30000);
+        };
+
+        resetTimeout();
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                resetTimeout();
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed.startsWith('{')) continue;
+                    try {
+                        const evt = JSON.parse(trimmed);
+                        if (!evt?.type) continue;
+                        if (this._handleStreamEvent(evt, state, timeoutId) === 'break') return;
+                    } catch (e) { /* Ligne partielle */ }
+                }
+            }
+
+            if (state.error) {
+                this.setLoading(false);
+                this._markTransparencyError(state.error);
+                this.addMessage('❌ ' + state.error, 'assistant');
+            } else if (!state.done && state.text === '') {
+                this.setLoading(false);
+                this._markTransparencyError('Réponse vide du serveur');
+                this.addMessage('⚠️ Réponse vide du serveur.', 'assistant');
+            }
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    _handleStreamEvent(evt, state, timeoutId) {
+        const p = evt.payload;
+        const handlers = {
+            'delta':                 () => this._onDelta(p, state),
+            'result':                () => this._onResult(p, state, timeoutId),
+            'status':                () => { if (p?.message) this.updateLoadingText(p.message); },
+            'title':                 () => this._onTitle(p),
+            'error':                 () => { state.error = typeof p === 'string' ? p : (p?.message || 'Erreur interne.'); state.done = true; clearTimeout(timeoutId); return 'break'; },
+            'thinking_delta':        () => this.renderThinkingDelta(p),
+            'tool_started':          () => this.renderToolStarted(p),
+            'tool_completed':        () => this.renderToolCompleted(p),
+            'turn_iteration':        () => this.renderTurnIteration(p),
+            'rag_context':           () => this.renderRagContext(p),
+            'memory_recalled':       () => this.renderMemoryRecalled(p),
+            'usage_update':          () => this.renderUsageUpdate(p),
+            'artifacts':             () => this.renderArtifacts(p),
+            'workflow_step_started': () => this.renderWorkflowStepStarted(p),
+            'workflow_step':         () => this.renderWorkflowStepCompleted(p),
+            'tool_executed':         () => this._onToolExecuted(p),
+        };
+        return handlers[evt.type]?.();
+    }
+
+    _onDelta(payload, state) {
+        if (!state.bubble) {
+            this.setLoading(false);
+            this.addMessage('', 'assistant');
+            const bubbles = this.messagesTarget.querySelectorAll('.synapse-chat-message--assistant .synapse-chat-bubble');
+            state.bubble = bubbles[bubbles.length - 1];
+        }
+        if (payload?.text) {
+            state.text += payload.text;
+            state.bubble.innerHTML = this.parseMarkdown(state.text);
+            this.scrollToBottom();
+        }
+    }
+
+    _onResult(payload, state, timeoutId) {
+        state.done = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        this.setLoading(false);
+
+        if (payload?.conversation_id) this.updateUrlConversation(payload.conversation_id);
+
+        if (state.bubble && payload?.answer) {
+            state.bubble.innerHTML = this.parseMarkdown(payload.answer);
+            if (this.debugValue && payload?.debug_id) {
+                this.addDebugButtonToMessage(state.bubble.closest('.synapse-chat-message'), payload.debug_id);
+            }
+        } else if (!state.bubble && (payload?.answer || payload?.generated_attachments?.length > 0)) {
+            const displayText = payload?.answer && payload.answer !== '[image]' ? payload.answer : '';
+            this.addMessage(displayText, 'assistant', { debug_id: payload.debug_id });
+            const bubbles = this.messagesTarget.querySelectorAll('.synapse-chat-message--assistant .synapse-chat-bubble');
+            state.bubble = bubbles[bubbles.length - 1];
+        }
+
+        if (state.bubble && payload?.generated_attachments?.length > 0) {
+            const html = '<div class="synapse-chat-message-attachments">' +
+                payload.generated_attachments.map(att => {
+                    const url = this.attachmentUrlTemplateValue.replace('ATTACHMENT_ID', att.uuid);
+                    return this._renderAttachmentBadge(att.mime_type || 'image/png', url, att.display_name);
+                }).join('') + '</div>';
+            state.bubble.insertAdjacentHTML('afterbegin', html);
+        }
+    }
+
+    _onTitle(payload) {
+        if (!payload?.title) return;
+        this.updateSidebarConversationTitle(this.currentConversationIdValue, payload.title);
+        if (this.hasConversationTitleTarget) this.conversationTitleTarget.textContent = payload.title;
+    }
+
+    _onToolExecuted(payload) {
+        if (payload?.tool === 'propose_to_remember' && payload?.proposal) {
+            this.showMemoryProposal(payload.proposal, payload.conversation_id || this.currentConversationIdValue);
         }
     }
 
@@ -555,11 +558,6 @@ export default class extends Controller {
         if (this.hasFileInputTarget) {
             this.fileInputTarget.click();
         }
-    }
-
-    /** @deprecated Utiliser attachFile() */
-    attachImage() {
-        this.attachFile();
     }
 
     async handleFileInput() {
@@ -626,19 +624,9 @@ export default class extends Controller {
         this.renderFilePreview();
     }
 
-    /** @deprecated Utiliser removeFile() */
-    removeImage(event) {
-        this.removeFile(event);
-    }
-
     clearPendingFiles() {
         this.pendingFiles = [];
         this.renderFilePreview();
-    }
-
-    /** @deprecated Utiliser clearPendingFiles() */
-    clearPendingImages() {
-        this.clearPendingFiles();
     }
 
     openLightbox(src) {
@@ -707,7 +695,13 @@ export default class extends Controller {
             `;
         }
 
-        this.messagesTarget.insertAdjacentHTML('beforeend', html);
+        // Si un encart mémoire est le dernier élément, insérer le message avant
+        const memoryEncart = this.messagesTarget.querySelector('.synapse-chat-message:last-child .synapse-chat-memory-encart');
+        if (memoryEncart && role === 'assistant') {
+            memoryEncart.closest('.synapse-chat-message').insertAdjacentHTML('beforebegin', html);
+        } else {
+            this.messagesTarget.insertAdjacentHTML('beforeend', html);
+        }
         this.scrollToBottom();
     }
 
@@ -1007,138 +1001,89 @@ export default class extends Controller {
 
     /* ── 4.5. SÉLECTEUR DE TONS ────────────────────────────────────────────── */
 
-    toggleToneMenu(event) {
+    // ── Helpers génériques pour les menus Tone / Agent ──
+
+    _cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+    _toggleMenu(type, event) {
         if (event) event.stopPropagation();
-        if (this.hasToneMenuTarget) {
-            this.toneMenuTarget.classList.toggle('synapse-hidden');
-            this.toneTriggerTarget.classList.toggle('is-open');
+        const menuKey = `${type}Menu`, triggerKey = `${type}Trigger`;
+        if (this[`has${this._cap(menuKey)}Target`]) {
+            this[`${menuKey}Target`].classList.toggle('synapse-hidden');
+            this[`${triggerKey}Target`].classList.toggle('is-open');
         }
     }
 
-    selectTone(event) {
-        const { toneKey, toneName, toneEmoji } = event.currentTarget.dataset;
+    _selectOption(type, event) {
+        const ds = event.currentTarget.dataset;
+        const key = ds[`${type}Key`], name = ds[`${type}Name`], emoji = ds[`${type}Emoji`];
 
-        // Mise à jour de l'UI du trigger
-        if (this.hasCurrentToneEmojiTarget) this.currentToneEmojiTarget.textContent = toneEmoji;
-        if (this.hasCurrentToneNameTarget) this.currentToneNameTarget.textContent = toneName;
-        if (this.hasToneInputTarget) this.toneInputTarget.value = toneKey;
+        if (this[`hasCurrent${this._cap(type)}EmojiTarget`]) this[`current${this._cap(type)}EmojiTarget`].textContent = emoji;
+        if (this[`hasCurrent${this._cap(type)}NameTarget`]) this[`current${this._cap(type)}NameTarget`].textContent = name;
+        if (this[`has${this._cap(type)}InputTarget`]) this[`${type}InputTarget`].value = key;
 
-        // Mise à jour de l'état "active" dans le menu
-        if (this.hasToneMenuTarget) {
-            this.toneMenuTarget.querySelectorAll('.synapse-chat-tone-option').forEach(opt => {
-                opt.classList.toggle('active', opt.dataset.toneKey === toneKey);
+        if (this[`has${this._cap(type)}MenuTarget`]) {
+            this[`${type}MenuTarget`].querySelectorAll('.synapse-chat-tone-option').forEach(opt => {
+                opt.classList.toggle('active', opt.dataset[`${type}Key`] === key);
             });
         }
 
-        // Sauvegarde persistante
-        this.savePersistentTone(toneKey, toneName, toneEmoji);
-
-        // Fermer le menu
-        this.toggleToneMenu();
+        localStorage.setItem(`synapse_chat_${type}`, JSON.stringify({ key, name, emoji }));
+        this._toggleMenu(type);
     }
 
-    closeToneMenuOutside(event) {
-        if (!this.hasTonePickerTarget) return;
-        if (!this.tonePickerTarget.contains(event.target)) {
-            if (this.hasToneMenuTarget && !this.toneMenuTarget.classList.contains('synapse-hidden')) {
-                this.toggleToneMenu();
+    _closeMenuOutside(type, event) {
+        const pickerKey = `${type}Picker`;
+        if (!this[`has${this._cap(pickerKey)}Target`]) return;
+        if (!this[`${pickerKey}Target`].contains(event.target)) {
+            const menuKey = `${type}Menu`;
+            if (this[`has${this._cap(menuKey)}Target`] && !this[`${menuKey}Target`].classList.contains('synapse-hidden')) {
+                this._toggleMenu(type);
             }
         }
     }
 
-    savePersistentTone(key, name, emoji) {
-        localStorage.setItem('synapse_chat_tone', JSON.stringify({ key, name, emoji }));
-    }
-
-    loadPersistentTone() {
-        const saved = localStorage.getItem('synapse_chat_tone');
-        if (saved) {
-            try {
-                const { key, name, emoji } = JSON.parse(saved);
-                if (this.hasCurrentToneEmojiTarget) this.currentToneEmojiTarget.textContent = emoji;
-                if (this.hasCurrentToneNameTarget) this.currentToneNameTarget.textContent = name;
-                if (this.hasToneInputTarget) this.toneInputTarget.value = key;
-
-                if (this.hasToneMenuTarget) {
-                    this.toneMenuTarget.querySelectorAll('.synapse-chat-tone-option').forEach(opt => {
-                        opt.classList.toggle('active', opt.dataset.toneKey === key);
-                    });
-                }
-            } catch (e) {
-                console.error('Erreur lors du chargement du ton persistant', e);
+    _loadPersistent(type) {
+        const saved = localStorage.getItem(`synapse_chat_${type}`);
+        if (!saved) return;
+        try {
+            const { key, name, emoji } = JSON.parse(saved);
+            if (this[`hasCurrent${this._cap(type)}EmojiTarget`]) this[`current${this._cap(type)}EmojiTarget`].textContent = emoji;
+            if (this[`hasCurrent${this._cap(type)}NameTarget`]) this[`current${this._cap(type)}NameTarget`].textContent = name;
+            if (this[`has${this._cap(type)}InputTarget`]) this[`${type}InputTarget`].value = key;
+            if (this[`has${this._cap(type)}MenuTarget`]) {
+                this[`${type}MenuTarget`].querySelectorAll('.synapse-chat-tone-option').forEach(opt => {
+                    opt.classList.toggle('active', opt.dataset[`${type}Key`] === key);
+                });
             }
+        } catch (e) {
+            console.error(`Erreur chargement ${type} persistant`, e);
         }
     }
 
-    /* ── 4.6. SÉLECTEUR D'AGENTS ────────────────────────────────────────────── */
+    // ── API publique Tone (Stimulus actions) ──
 
-    toggleAgentMenu(event) {
-        if (event) event.stopPropagation();
-        if (this.hasAgentMenuTarget) {
-            this.agentMenuTarget.classList.toggle('synapse-hidden');
-            this.agentTriggerTarget.classList.toggle('is-open');
-        }
-    }
+    toggleToneMenu(event) { this._toggleMenu('tone', event); }
+    selectTone(event) { this._selectOption('tone', event); }
+    closeToneMenuOutside(event) { this._closeMenuOutside('tone', event); }
+    loadPersistentTone() { this._loadPersistent('tone'); }
 
-    selectAgent(event) {
-        const { agentKey, agentName, agentEmoji } = event.currentTarget.dataset;
+    // ── API publique Agent (Stimulus actions) ──
 
-        if (this.hasCurrentAgentEmojiTarget) this.currentAgentEmojiTarget.textContent = agentEmoji;
-        if (this.hasCurrentAgentNameTarget) this.currentAgentNameTarget.textContent = agentName;
-        if (this.hasAgentInputTarget) this.agentInputTarget.value = agentKey;
-
-        if (this.hasAgentMenuTarget) {
-            this.agentMenuTarget.querySelectorAll('.synapse-chat-tone-option').forEach(opt => {
-                opt.classList.toggle('active', opt.dataset.agentKey === agentKey);
-            });
-        }
-
-        // Sauvegarde persistante
-        this.savePersistentAgent(agentKey, agentName, agentEmoji);
-
-        this.toggleAgentMenu();
-    }
-
-    closeAgentMenuOutside(event) {
-        if (!this.hasAgentPickerTarget) return;
-        if (!this.agentPickerTarget.contains(event.target)) {
-            if (this.hasAgentMenuTarget && !this.agentMenuTarget.classList.contains('synapse-hidden')) {
-                this.toggleAgentMenu();
-            }
-        }
-    }
-
-    savePersistentAgent(key, name, emoji) {
-        localStorage.setItem('synapse_chat_agent', JSON.stringify({ key, name, emoji }));
-    }
-
-    loadPersistentAgent() {
-        const saved = localStorage.getItem('synapse_chat_agent');
-        if (saved) {
-            try {
-                const { key, name, emoji } = JSON.parse(saved);
-                if (this.hasCurrentAgentEmojiTarget) this.currentAgentEmojiTarget.textContent = emoji;
-                if (this.hasCurrentAgentNameTarget) this.currentAgentNameTarget.textContent = name;
-                if (this.hasAgentInputTarget) this.agentInputTarget.value = key;
-
-                if (this.hasAgentMenuTarget) {
-                    this.agentMenuTarget.querySelectorAll('.synapse-chat-tone-option').forEach(opt => {
-                        opt.classList.toggle('active', opt.dataset.agentKey === key);
-                    });
-                }
-            } catch (e) {
-                console.error('Erreur lors du chargement de l\'agent persistant', e);
-            }
-        }
-    }
+    toggleAgentMenu(event) { this._toggleMenu('agent', event); }
+    selectAgent(event) { this._selectOption('agent', event); }
+    closeAgentMenuOutside(event) { this._closeMenuOutside('agent', event); }
+    loadPersistentAgent() { this._loadPersistent('agent'); }
 
     /* ── 5. UTILITAIRES & MARKDOWN ─────────────────────────────────────────── */
 
     scrollToBottom() {
-        const scrollContainer = this.element.querySelector('.synapse-chat-main');
-        if (scrollContainer) {
-            scrollContainer.scrollTop = scrollContainer.scrollHeight;
-        }
+        if (this._scrollRafId) return;
+        this._scrollRafId = requestAnimationFrame(() => {
+            this._scrollRafId = null;
+            const el = this.hasMessagesTarget ? this.messagesTarget.closest('.synapse-chat-main') : null;
+            if (el) el.scrollTop = el.scrollHeight;
+        });
     }
 
     updateUrlConversation(conversationId) {
@@ -1235,44 +1180,435 @@ export default class extends Controller {
         return `<a href="${url}" style="${style}" target="_blank" rel="noopener">${svg} ${displayName}</a>`;
     }
 
-    // ── Workflow Sidebar ("Réflexion interne") ──────────────────────────────
+    // ── Panneau de Transparence ("Anti Boîte Noire") ──────────────────────
 
     /**
-     * Ouvre la sidebar workflow si nécessaire et retourne le container des steps.
+     * Scanne les messages assistant existants dans le DOM pour collecter les artefacts (images, fichiers).
+     * Appelé au connect() pour pré-remplir la galerie d'artefacts de la conversation.
      */
-    _ensureWorkflowAside() {
+    _loadExistingArtifacts() {
+        if (!this.hasMessagesTarget) return;
+
+        const assistantMsgs = this.messagesTarget.querySelectorAll('.synapse-chat-message--assistant');
+        assistantMsgs.forEach(msg => {
+            const attachmentsContainer = msg.querySelector('.synapse-chat-message-attachments');
+            if (!attachmentsContainer) return;
+
+            // Images
+            attachmentsContainer.querySelectorAll('img').forEach(img => {
+                const url = img.src;
+                if (!url) return;
+                this._allArtifacts.push({
+                    uuid: this._extractUuidFromUrl(url),
+                    url: url,
+                    mime_type: 'image/png',
+                    display_name: img.alt || 'Image',
+                });
+            });
+
+            // Liens fichiers (PDF, audio, etc.)
+            attachmentsContainer.querySelectorAll('a[href]').forEach(link => {
+                const url = link.href;
+                if (!url) return;
+                // Éviter les doublons si l'<a> contient un <img> (déjà traité)
+                if (link.querySelector('img')) return;
+                this._allArtifacts.push({
+                    uuid: this._extractUuidFromUrl(url),
+                    url: url,
+                    mime_type: 'application/octet-stream',
+                    display_name: link.textContent?.trim() || 'Fichier',
+                });
+            });
+        });
+    }
+
+    /**
+     * Extrait l'UUID depuis une URL d'attachment (/synapse/attachment/{uuid}).
+     */
+    _extractUuidFromUrl(url) {
+        const match = url.match(/attachment\/([a-f0-9-]+)/i);
+        return match ? match[1] : url;
+    }
+
+    /**
+     * Ouvre le panneau de transparence si nécessaire et retourne l'aside.
+     */
+    _ensureTransparencyPanel() {
         if (!this.hasAsideTarget) return null;
 
         const aside = this.asideTarget;
 
         if (!aside.classList.contains('synapse-chat-aside--open')) {
             aside.classList.add('synapse-chat-aside--open');
+            this._transparencyThinkingText = '';
             aside.innerHTML = `
-                <div class="synapse-workflow-header">
-                    <div class="synapse-workflow-header__icon">
+                <div class="synapse-transparency-header">
+                    <div class="synapse-transparency-header__icon">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="M12 6v6l4 2"/></svg>
                     </div>
-                    <span class="synapse-workflow-header__title">Réflexion interne</span>
-                    <button type="button" class="synapse-workflow-header__close" aria-label="Fermer">
+                    <span class="synapse-transparency-header__title">Transparence</span>
+                    <button type="button" class="synapse-transparency-header__close" aria-label="Fermer">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                     </button>
                 </div>
-                <div class="synapse-workflow-steps"></div>
+                <div class="synapse-transparency-body">
+                    <div class="synapse-transparency-section" data-section="rag" style="display:none"></div>
+                    <div class="synapse-transparency-section" data-section="memory" style="display:none"></div>
+                    <div class="synapse-transparency-section" data-section="workflow" style="display:none"></div>
+                    <div class="synapse-transparency-section" data-section="thinking" style="display:none"></div>
+                    <div class="synapse-transparency-section" data-section="turns" style="display:none"></div>
+                    <div class="synapse-transparency-section" data-section="artifacts" style="display:none"></div>
+                </div>
+                <div class="synapse-transparency-footer" style="display:none"></div>
             `;
-            aside.querySelector('.synapse-workflow-header__close')?.addEventListener('click', () => {
-                this.clearWorkflowSteps();
+            aside.querySelector('.synapse-transparency-header__close')?.addEventListener('click', () => {
+                this.closeTransparencyPanel();
             });
+
+            // Restaurer les artefacts accumulés de la conversation
+            if (this._allArtifacts && this._allArtifacts.length > 0) {
+                this._renderArtifactsSection();
+            }
         }
 
-        return aside.querySelector('.synapse-workflow-steps');
+        return aside;
     }
 
     /**
-     * Affiche un step en état "réflexion en cours" dès que le backend commence à l'exécuter.
+     * Retourne une section du panneau par nom, la rend visible.
      */
+    _getSection(name) {
+        const aside = this._ensureTransparencyPanel();
+        if (!aside) return null;
+        const section = aside.querySelector(`[data-section="${name}"]`);
+        if (section) section.style.display = '';
+        return section;
+    }
+
+    /**
+     * Retourne le footer du panneau, le rend visible.
+     */
+    _getFooter() {
+        const aside = this._ensureTransparencyPanel();
+        if (!aside) return null;
+        const footer = aside.querySelector('.synapse-transparency-footer');
+        if (footer) footer.style.display = '';
+        return footer;
+    }
+
+    closeTransparencyPanel() {
+        if (!this.hasAsideTarget) return;
+        this.asideTarget.classList.remove('synapse-chat-aside--open');
+        this.asideTarget.innerHTML = '';
+        this._transparencyThinkingText = '';
+        this._turnCount = 0;
+    }
+
+    /**
+     * Marque le panneau de transparence en état d'erreur :
+     * - Remplace tous les spinners actifs par une icône d'erreur
+     * - Ajoute un indicateur d'erreur dans le footer
+     */
+    _markTransparencyError(errorMessage) {
+        if (!this.hasAsideTarget || !this.asideTarget.classList.contains('synapse-chat-aside--open')) return;
+
+        // Remplacer les spinners actifs par des icônes d'erreur
+        this.asideTarget.querySelectorAll('.synapse-workflow-step__spinner').forEach(spinner => {
+            spinner.outerHTML = '<span class="synapse-tool-call__icon" style="color: #ef4444;">⚠️</span>';
+        });
+
+        // Marquer les tool calls actifs comme en erreur
+        this.asideTarget.querySelectorAll('.synapse-tool-call--active').forEach(el => {
+            el.classList.remove('synapse-tool-call--active');
+            el.classList.add('synapse-tool-call--error');
+        });
+
+        // Marquer les workflow steps "thinking" comme en erreur
+        this.asideTarget.querySelectorAll('.synapse-workflow-step--thinking').forEach(el => {
+            el.classList.remove('synapse-workflow-step--thinking');
+            el.classList.add('synapse-workflow-step--error');
+            const answerEl = el.querySelector('.synapse-workflow-step__answer--thinking');
+            if (answerEl) {
+                answerEl.classList.remove('synapse-workflow-step__answer--thinking');
+                answerEl.textContent = errorMessage || 'Interrompu';
+            }
+        });
+
+        // Afficher l'erreur dans le footer
+        const footer = this._getFooter();
+        if (footer) {
+            footer.innerHTML = `<span class="synapse-transparency-footer__error">⚠️ ${escapeHtml(errorMessage || 'Erreur')}</span>`;
+        }
+    }
+
+    // ── Thinking ────────────────────────────────────────────────────────────
+
+    renderThinkingDelta(payload) {
+        const section = this._getSection('thinking');
+        if (!section) return;
+
+        if (!this._transparencyThinkingText) this._transparencyThinkingText = '';
+        this._transparencyThinkingText += payload.text || '';
+
+        const preview = this._transparencyThinkingText.length > 300
+            ? this._transparencyThinkingText.substring(0, 300) + '…'
+            : this._transparencyThinkingText;
+
+        section.innerHTML = `
+            <div class="synapse-transparency-section__title">💭 Raisonnement</div>
+            <div class="synapse-thinking-block synapse-tp-clickable">${escapeHtml(preview)}</div>
+        `;
+
+        section.querySelector('.synapse-thinking-block')?.addEventListener('click', () => {
+            this._showDetailPopup('💭 Raisonnement', this._transparencyThinkingText || '');
+        });
+
+        this.asideTarget.scrollTop = this.asideTarget.scrollHeight;
+    }
+
+    /**
+     * Popup modale générique pour afficher le contenu complet d'un bloc tronqué.
+     */
+    _showDetailPopup(title, content) {
+        document.querySelector('.synapse-tp-popup')?.remove();
+
+        const modal = document.createElement('div');
+        modal.className = 'synapse-tp-popup';
+        modal.innerHTML = `
+            <div class="synapse-tp-popup__backdrop"></div>
+            <div class="synapse-tp-popup__content">
+                <div class="synapse-tp-popup__header">
+                    <span class="synapse-tp-popup__title">${escapeHtml(title)}</span>
+                    <button type="button" class="synapse-tp-popup__close" aria-label="Fermer">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                </div>
+                <div class="synapse-tp-popup__body">${escapeHtml(content)}</div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        const close = () => modal.remove();
+        modal.querySelector('.synapse-tp-popup__close')?.addEventListener('click', close);
+        modal.querySelector('.synapse-tp-popup__backdrop')?.addEventListener('click', close);
+    }
+
+    // ── Tool Calls ──────────────────────────────────────────────────────────
+
+    renderToolStarted(payload) {
+        const section = this._getSection('turns');
+        if (!section) return;
+
+        // Track turn count
+        if (!this._turnCount) this._turnCount = 0;
+
+        // Ensure section title
+        if (!section.querySelector('.synapse-transparency-section__title')) {
+            section.innerHTML = '<div class="synapse-transparency-section__title">🔧 Outils</div>';
+        }
+
+        const toolEl = document.createElement('div');
+        toolEl.className = 'synapse-tool-call synapse-tool-call--active';
+        toolEl.setAttribute('data-tool-call-id', payload.toolCallId);
+        const displayName = payload.toolLabel || payload.toolName;
+        toolEl.innerHTML = `
+            <span class="synapse-workflow-step__spinner"></span>
+            <span class="synapse-tool-call__name">${escapeHtml(displayName)}</span>
+        `;
+        toolEl.title = payload.toolName;
+        section.appendChild(toolEl);
+
+        this.asideTarget.scrollTop = this.asideTarget.scrollHeight;
+    }
+
+    renderToolCompleted(payload) {
+        const section = this._getSection('turns');
+        if (!section) return;
+
+        // Find active tool call by name (toolCallId not available in completed event)
+        const activeTool = section.querySelector(`.synapse-tool-call--active`);
+        if (activeTool) {
+            activeTool.classList.remove('synapse-tool-call--active');
+            activeTool.classList.add('synapse-tool-call--done');
+            const spinner = activeTool.querySelector('.synapse-workflow-step__spinner');
+            if (spinner) spinner.outerHTML = '<span class="synapse-tool-call__icon">✅</span>';
+        }
+    }
+
+    // ── Multi-Turn Iteration ────────────────────────────────────────────────
+
+    renderTurnIteration(payload) {
+        const section = this._getSection('turns');
+        if (!section) return;
+
+        // Increment real turn counter
+        if (!this._turnCount) this._turnCount = 0;
+        this._turnCount++;
+
+        // Update section title with actual turn count
+        const title = section.querySelector('.synapse-transparency-section__title');
+        if (title) {
+            title.textContent = `🔧 Outils · Tour ${this._turnCount}`;
+        }
+    }
+
+    // ── RAG Context ─────────────────────────────────────────────────────────
+
+    renderRagContext(payload) {
+        const section = this._getSection('rag');
+        if (!section) return;
+
+        const results = payload.results || [];
+        let html = `<div class="synapse-transparency-section__title">📚 Sources consultées</div>`;
+        if (results.length > 0) {
+            html += results.map((r, i) => `
+                <div class="synapse-rag-item synapse-tp-clickable" data-rag-index="${i}">
+                    <div class="synapse-rag-item__source">${escapeHtml(r.source)}</div>
+                    <div class="synapse-rag-item__preview">${escapeHtml(r.content_preview)}</div>
+                    <div class="synapse-rag-item__score">Score : ${(r.score * 100).toFixed(0)}%</div>
+                </div>
+            `).join('');
+            html += `<div class="synapse-rag-item__tokens">${payload.tokenEstimate || 0} tokens injectés</div>`;
+        }
+        section.innerHTML = html;
+
+        // Click handlers for each RAG item
+        results.forEach((r, i) => {
+            section.querySelector(`[data-rag-index="${i}"]`)?.addEventListener('click', () => {
+                this._showDetailPopup(`📚 ${r.source}`, r.content_preview);
+            });
+        });
+    }
+
+    // ── Memory Recalled ─────────────────────────────────────────────────────
+
+    renderMemoryRecalled(payload) {
+        const section = this._getSection('memory');
+        if (!section) return;
+
+        const memories = payload.memories || [];
+        let html = `<div class="synapse-transparency-section__title">🧠 Mémoire rappelée</div>`;
+        if (memories.length > 0) {
+            html += memories.map((m, i) => `
+                <div class="synapse-tp-memory synapse-tp-clickable" data-mem-index="${i}">
+                    <div class="synapse-tp-memory__content">${escapeHtml(m.content_preview)}</div>
+                    <div class="synapse-tp-memory__score">Score : ${(m.score * 100).toFixed(0)}%</div>
+                </div>
+            `).join('');
+        }
+        section.innerHTML = html;
+
+        // Click handlers
+        memories.forEach((m, i) => {
+            section.querySelector(`[data-mem-index="${i}"]`)?.addEventListener('click', () => {
+                this._showDetailPopup('🧠 Mémoire', m.content_preview);
+            });
+        });
+    }
+
+    // ── Usage Update ────────────────────────────────────────────────────────
+
+    renderUsageUpdate(payload) {
+        const footer = this._getFooter();
+        if (!footer) return;
+
+        const totalTokens = (payload.promptTokens || 0) + (payload.completionTokens || 0);
+        const thinkingInfo = payload.thinkingTokens > 0 ? ` · ${payload.thinkingTokens} thinking` : '';
+        const costStr = payload.cost > 0 ? (payload.cost < 0.01 ? '<0.01' : payload.cost.toFixed(3)) : '0';
+
+        footer.innerHTML = `
+            <span class="synapse-transparency-footer__model">${escapeHtml(payload.model || '')}</span>
+            <span class="synapse-transparency-footer__tokens">${totalTokens} tk${thinkingInfo}</span>
+            <span class="synapse-transparency-footer__cost">~${costStr}€</span>
+        `;
+    }
+
+    // ── Artifacts ────────────────────────────────────────────────────────────
+
+    renderArtifacts(payload) {
+        const items = payload.items || [];
+        if (items.length === 0) return;
+
+        // Accumuler les nouveaux artefacts (éviter les doublons par uuid)
+        const existingUuids = new Set(this._allArtifacts.map(a => a.uuid));
+        items.forEach(att => {
+            if (!existingUuids.has(att.uuid)) {
+                const url = this.attachmentUrlTemplateValue.replace('ATTACHMENT_ID', att.uuid);
+                this._allArtifacts.push({
+                    uuid: att.uuid,
+                    url: url,
+                    mime_type: att.mime_type || 'application/octet-stream',
+                    display_name: att.display_name || 'fichier',
+                });
+            }
+        });
+
+        this._renderArtifactsSection();
+    }
+
+    /**
+     * Render la section artefacts à partir de this._allArtifacts.
+     */
+    _renderArtifactsSection() {
+        const section = this._getSection('artifacts');
+        if (!section) return;
+        if (!this._allArtifacts || this._allArtifacts.length === 0) return;
+
+        let html = `<div class="synapse-transparency-section__title">🖼️ Artefacts (${this._allArtifacts.length})</div>`;
+        html += '<div class="synapse-artifacts-grid">';
+        this._allArtifacts.forEach(att => {
+            const isImage = (att.mime_type || '').startsWith('image/');
+            if (isImage) {
+                html += `<a href="${att.url}" target="_blank" rel="noopener" class="synapse-artifact-link">
+                    <img src="${att.url}" alt="${escapeHtml(att.display_name || '')}" class="synapse-artifact-thumb" />
+                </a>`;
+            } else {
+                html += `<a href="${att.url}" target="_blank" rel="noopener" class="synapse-artifact-link synapse-artifact-link--file">
+                    📄 ${escapeHtml(att.display_name || 'fichier')}
+                </a>`;
+            }
+        });
+        html += '</div>';
+        section.innerHTML = html;
+        this._updateArtifactsButton();
+    }
+
+    /**
+     * Ouvre le panneau de transparence pour afficher uniquement les artefacts.
+     */
+    showArtifacts() {
+        if (!this._allArtifacts || this._allArtifacts.length === 0) return;
+        this._ensureTransparencyPanel();
+        this._renderArtifactsSection();
+    }
+
+    /**
+     * Affiche/masque le bouton artefacts dans la top bar et met à jour le compteur.
+     */
+    _updateArtifactsButton() {
+        if (!this.hasArtifactsBtnTarget) return;
+        const count = this._allArtifacts ? this._allArtifacts.length : 0;
+        if (count > 0) {
+            this.artifactsBtnTarget.classList.remove('synapse-hidden');
+            if (this.hasArtifactsCountTarget) {
+                this.artifactsCountTarget.textContent = count;
+            }
+        } else {
+            this.artifactsBtnTarget.classList.add('synapse-hidden');
+        }
+    }
+
+    // ── Workflow Steps (compatibilité) ──────────────────────────────────────
+
     renderWorkflowStepStarted(payload) {
-        const container = this._ensureWorkflowAside();
+        const container = this._getSection('workflow');
         if (!container) return;
+
+        // Ensure section title
+        if (!container.querySelector('.synapse-transparency-section__title')) {
+            container.innerHTML = '<div class="synapse-transparency-section__title">🔄 Pipeline workflow</div>';
+        }
 
         const stepNum = payload.stepIndex + 1;
         const total = payload.totalSteps;
@@ -1297,18 +1633,20 @@ export default class extends Controller {
         this.asideTarget.scrollTop = this.asideTarget.scrollHeight;
     }
 
-    /**
-     * Met à jour un step existant avec la réponse finale (remplace le spinner).
-     */
     renderWorkflowStepCompleted(payload) {
-        const container = this._ensureWorkflowAside();
+        const container = this._getSection('workflow');
         if (!container) return;
 
-        const tokens = payload.usage?.total_tokens ?? 0;
+        // Ensure section title
+        if (!container.querySelector('.synapse-transparency-section__title')) {
+            container.innerHTML = '<div class="synapse-transparency-section__title">🔄 Pipeline workflow</div>';
+        }
 
-        let answerPreview = payload.answer || '';
-        if (answerPreview.length > 200) {
-            answerPreview = answerPreview.substring(0, 200) + '…';
+        const tokens = payload.usage?.total_tokens ?? 0;
+        const fullAnswer = payload.answer || '';
+        let answerPreview = fullAnswer;
+        if (answerPreview.length > 120) {
+            answerPreview = answerPreview.substring(0, 120) + '…';
         }
 
         // Retrouver le step "thinking" existant par son index
@@ -1316,24 +1654,28 @@ export default class extends Controller {
         if (existingStep) {
             existingStep.classList.remove('synapse-workflow-step--thinking');
             existingStep.classList.add('synapse-workflow-step--done');
+            if (fullAnswer) existingStep.classList.add('synapse-tp-clickable');
             const answerEl = existingStep.querySelector('.synapse-workflow-step__answer');
             if (answerEl) {
                 answerEl.classList.remove('synapse-workflow-step__answer--thinking');
                 answerEl.innerHTML = escapeHtml(answerPreview);
             }
-            // Ajouter les tokens
             if (tokens > 0) {
                 const tokensEl = document.createElement('div');
                 tokensEl.className = 'synapse-workflow-step__tokens';
                 tokensEl.textContent = `${tokens} tokens`;
                 existingStep.appendChild(tokensEl);
             }
+            if (fullAnswer) {
+                existingStep.addEventListener('click', () => {
+                    this._showDetailPopup(`${payload.stepName} (${payload.agentName})`, fullAnswer);
+                });
+            }
         } else {
-            // Fallback : si le step_started n'a pas été reçu, créer le bloc complet
             const stepNum = payload.stepIndex + 1;
             const total = payload.totalSteps;
             const stepEl = document.createElement('div');
-            stepEl.className = 'synapse-workflow-step synapse-workflow-step--appear synapse-workflow-step--done';
+            stepEl.className = `synapse-workflow-step synapse-workflow-step--appear synapse-workflow-step--done${fullAnswer ? ' synapse-tp-clickable' : ''}`;
             stepEl.setAttribute('data-step-index', payload.stepIndex);
             stepEl.innerHTML = `
                 <div class="synapse-workflow-step__header">
@@ -1346,15 +1688,14 @@ export default class extends Controller {
             `;
             container.appendChild(stepEl);
             requestAnimationFrame(() => stepEl.classList.add('synapse-workflow-step--visible'));
+            if (fullAnswer) {
+                stepEl.addEventListener('click', () => {
+                    this._showDetailPopup(`${payload.stepName} (${payload.agentName})`, fullAnswer);
+                });
+            }
         }
 
         this.asideTarget.scrollTop = this.asideTarget.scrollHeight;
-    }
-
-    clearWorkflowSteps() {
-        if (!this.hasAsideTarget) return;
-        this.asideTarget.classList.remove('synapse-chat-aside--open');
-        this.asideTarget.innerHTML = '';
     }
 
 }

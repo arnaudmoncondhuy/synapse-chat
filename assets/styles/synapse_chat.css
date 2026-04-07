@@ -531,13 +531,13 @@
 .synapse-chat-main__header {
     display: flex;
     align-items: center;
-    padding: 14px 24px;
+    padding: 8px 24px;
     border-bottom: 1px solid var(--synapse-chat-border);
     background: var(--synapse-chat-bg);
     z-index: 20;
     position: sticky;
     top: 0;
-    min-height: 48px;
+    min-height: 36px;
 }
 
 .synapse-chat-main__title {
@@ -548,6 +548,34 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.synapse-chat-artifacts-btn {
+    position: relative;
+    margin-left: auto;
+    color: var(--synapse-chat-muted, #94a3b8);
+    transition: color 0.2s;
+}
+
+.synapse-chat-artifacts-btn:hover {
+    color: var(--synapse-chat-accent, #6366f1);
+}
+
+.synapse-chat-artifacts-btn__count {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--synapse-chat-accent, #6366f1);
+    color: white;
+    font-size: 0.6rem;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
 }
 
 .synapse-chat-sidebar-toggle {
@@ -756,7 +784,7 @@
 
 /* ── 6. ZONE DE SAISIE (INPUT) ─────────────────────────────────────────── */
 .synapse-chat-input-area {
-    padding: 60px 40px 30px;
+    padding: 60px 40px 10px;
     background: linear-gradient(to top, var(--synapse-chat-bg) 75%, transparent);
     z-index: 10;
     position: sticky;
@@ -903,7 +931,8 @@
     font-size: 0.65rem;
     color: var(--synapse-chat-text-muted);
     opacity: 0.5;
-    margin-top: 8px;
+    margin-top: 4px;
+    line-height: 1.2;
 }
 
 /* ── 7. COMPOSANTS TRANVERSES (Boutons, Boutons Action, Mémoire) ───────── */
@@ -1507,7 +1536,7 @@
     to { opacity: 1; }
 }
 
-/* ── 12. COLONNE DROITE — SIDEBAR "RÉFLEXION INTERNE" ──────────────────── */
+/* ── 12. COLONNE DROITE — PANNEAU DE TRANSPARENCE ──────────────────────── */
 
 .synapse-chat-aside {
     width: 0;
@@ -1523,37 +1552,35 @@
 .synapse-chat-aside--open {
     width: 320px;
     opacity: 1;
-    overflow-y: auto;
+    overflow: hidden;
 }
 
-/* Header */
-.synapse-workflow-header {
+/* ── Transparency Header ── */
+.synapse-transparency-header {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 12px 16px;
     border-bottom: 1px solid var(--synapse-chat-border, #e2e8f0);
-    position: sticky;
-    top: 0;
     background: var(--synapse-chat-bg, #ffffff);
-    z-index: 1;
+    flex-shrink: 0;
 }
 
-.synapse-workflow-header__icon {
+.synapse-transparency-header__icon {
     color: var(--synapse-chat-accent, #6366f1);
     display: flex;
     align-items: center;
     animation: synapse-workflow-pulse 2s ease-in-out infinite;
 }
 
-.synapse-workflow-header__title {
+.synapse-transparency-header__title {
     font-size: 0.8rem;
     font-weight: 600;
     color: var(--synapse-chat-text, #1e293b);
     flex: 1;
 }
 
-.synapse-workflow-header__close {
+.synapse-transparency-header__close {
     background: none;
     border: none;
     cursor: pointer;
@@ -1564,17 +1591,287 @@
     align-items: center;
 }
 
-.synapse-workflow-header__close:hover {
+.synapse-transparency-header__close:hover {
     background: var(--synapse-chat-hover, #f1f5f9);
     color: var(--synapse-chat-text, #1e293b);
 }
 
-/* Steps container */
-.synapse-workflow-steps {
+/* ── Transparency Body (scrollable sections) ── */
+.synapse-transparency-body {
+    flex: 1;
+    overflow-y: auto;
     padding: 12px;
     display: flex;
     flex-direction: column;
+    gap: 12px;
+}
+
+/* ── Section titles ── */
+.synapse-transparency-section__title {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--synapse-chat-text, #1e293b);
+    margin-bottom: 8px;
+}
+
+/* ── Thinking section ── */
+.synapse-thinking-block {
+    font-size: 0.75rem;
+    font-style: italic;
+    color: var(--synapse-chat-text-secondary, #475569);
+    line-height: 1.5;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 8px;
+    background: var(--synapse-chat-hover, #f8fafc);
+    border-radius: 6px;
+    border: 1px solid var(--synapse-chat-border, #e2e8f0);
+    word-break: break-word;
+}
+
+/* ── Clickable blocks (hover effect + cursor) ── */
+.synapse-tp-clickable {
+    cursor: pointer;
+    transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.synapse-tp-clickable:hover {
+    background: var(--synapse-chat-hover, #f1f5f9);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* ── Detail popup (generic) ── */
+.synapse-tp-popup {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.synapse-tp-popup__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.synapse-tp-popup__content {
+    position: relative;
+    width: 90vw;
+    max-width: 640px;
+    max-height: 80vh;
+    background: var(--synapse-chat-bg, #ffffff);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.synapse-tp-popup__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--synapse-chat-border, #e2e8f0);
+    flex-shrink: 0;
+}
+
+.synapse-tp-popup__title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--synapse-chat-text, #1e293b);
+}
+
+.synapse-tp-popup__close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--synapse-chat-muted, #94a3b8);
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.synapse-tp-popup__close:hover {
+    background: var(--synapse-chat-hover, #f1f5f9);
+    color: var(--synapse-chat-text, #1e293b);
+}
+
+.synapse-tp-popup__body {
+    padding: 16px 18px;
+    overflow-y: auto;
+    font-size: 0.8rem;
+    color: var(--synapse-chat-text-secondary, #475569);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* ── Tool call (inline in turns section) ── */
+.synapse-tool-call {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    padding: 6px 8px;
+    background: var(--synapse-chat-hover, #f8fafc);
+    border-radius: 6px;
+    margin-bottom: 4px;
+}
+
+.synapse-tool-call--active {
+    border-left: 2px solid var(--synapse-chat-accent, #6366f1);
+}
+
+.synapse-tool-call--done {
+    border-left: 2px solid var(--synapse-chat-success, #22c55e);
+}
+
+.synapse-tool-call--error {
+    border-left: 2px solid #ef4444;
+    opacity: 0.7;
+}
+
+.synapse-tool-call__name {
+    font-weight: 600;
+    color: var(--synapse-chat-text, #1e293b);
+    white-space: nowrap;
+}
+
+.synapse-tool-call__icon {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+}
+
+/* ── RAG sources ── */
+.synapse-rag-item {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--synapse-chat-border, #e2e8f0);
+}
+
+.synapse-rag-item:last-of-type {
+    border-bottom: none;
+}
+
+.synapse-rag-item__source {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--synapse-chat-text, #1e293b);
+}
+
+.synapse-rag-item__preview {
+    font-size: 0.7rem;
+    color: var(--synapse-chat-text-secondary, #475569);
+    margin-top: 2px;
+    line-height: 1.3;
+}
+
+.synapse-rag-item__score {
+    font-size: 0.65rem;
+    color: var(--synapse-chat-muted, #94a3b8);
+    margin-top: 2px;
+}
+
+.synapse-rag-item__tokens {
+    font-size: 0.65rem;
+    color: var(--synapse-chat-accent, #6366f1);
+    margin-top: 6px;
+    font-weight: 600;
+}
+
+/* ── Transparency panel: recalled memory ── */
+.synapse-tp-memory {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--synapse-chat-border, #e2e8f0);
+}
+
+.synapse-tp-memory:last-of-type {
+    border-bottom: none;
+}
+
+.synapse-tp-memory__content {
+    font-size: 0.72rem;
+    font-style: italic;
+    color: var(--synapse-chat-text-secondary, #475569);
+    line-height: 1.3;
+}
+
+.synapse-tp-memory__score {
+    font-size: 0.65rem;
+    color: var(--synapse-chat-muted, #94a3b8);
+    margin-top: 2px;
+}
+
+/* ── Artifacts ── */
+.synapse-artifacts-grid {
+    display: flex;
+    flex-wrap: wrap;
     gap: 8px;
+}
+
+.synapse-artifact-thumb {
+    width: 60px;
+    height: 60px;
+    border-radius: 6px;
+    object-fit: cover;
+    border: 1px solid var(--synapse-chat-border, #e2e8f0);
+    transition: transform 0.15s ease;
+}
+
+.synapse-artifact-thumb:hover {
+    transform: scale(1.05);
+}
+
+.synapse-artifact-link {
+    text-decoration: none;
+}
+
+.synapse-artifact-link--file {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    color: var(--synapse-chat-accent, #6366f1);
+    padding: 6px 8px;
+    background: var(--synapse-chat-hover, #f8fafc);
+    border-radius: 6px;
+    border: 1px solid var(--synapse-chat-border, #e2e8f0);
+}
+
+/* ── Footer (cost/tokens/duration) ── */
+.synapse-transparency-footer {
+    border-top: 1px solid var(--synapse-chat-border, #e2e8f0);
+    padding: 8px 12px;
+    font-size: 0.68rem;
+    color: var(--synapse-chat-muted, #94a3b8);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    flex-shrink: 0;
+    background: var(--synapse-chat-bg, #ffffff);
+}
+
+.synapse-transparency-footer__model {
+    font-weight: 600;
+    color: var(--synapse-chat-text-secondary, #475569);
+}
+
+.synapse-transparency-footer__tokens {
+    color: var(--synapse-chat-muted, #94a3b8);
+}
+
+.synapse-transparency-footer__cost {
+    color: var(--synapse-chat-accent, #6366f1);
+    font-weight: 600;
+    margin-left: auto;
+}
+
+.synapse-transparency-footer__error {
+    color: #ef4444;
+    font-weight: 600;
 }
 
 /* Individual step card */
@@ -1583,6 +1880,7 @@
     border: 1px solid var(--synapse-chat-border, #e2e8f0);
     border-radius: 8px;
     padding: 10px 12px;
+    margin-bottom: 6px;
     opacity: 0;
     transform: translateY(8px);
     transition: opacity 0.3s ease, transform 0.3s ease;
@@ -1669,6 +1967,11 @@
 /* Step terminé */
 .synapse-workflow-step--done {
     border-style: solid;
+}
+
+.synapse-workflow-step--error {
+    border-color: #ef4444;
+    opacity: 0.7;
 }
 
 /* Badge workflow dans l'agent picker */

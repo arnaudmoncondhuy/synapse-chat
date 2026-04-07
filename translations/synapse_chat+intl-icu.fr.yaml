@@ -49,3 +49,17 @@ synapse.chat.api.error.timeout: "⏱️ Timeout : L'IA a mis trop de temps à r�
 synapse.chat.api.error.system: "❌ Erreur système : Une erreur inattendue est survenue."
 
 synapse.chat.api.title_generation_prompt: "Génère un titre très court (max 6 mots) sans guillemets pour : ''{message}''"
+
+synapse.chat.transparency.title: "Transparence"
+synapse.chat.transparency.close: "Fermer"
+synapse.chat.transparency.thinking.title: "Raisonnement"
+synapse.chat.transparency.turns.title: "Tours ({count})"
+synapse.chat.transparency.rag.title: "Sources consultées"
+synapse.chat.transparency.rag.tokens: "{count} tokens injectés"
+synapse.chat.transparency.memory.title: "Mémoire rappelée"
+synapse.chat.transparency.artifacts.title: "Artefacts générés"
+synapse.chat.transparency.artifacts_btn: "Voir les artefacts"
+synapse.chat.transparency.usage.model: "Modèle"
+synapse.chat.transparency.usage.tokens: "Tokens"
+synapse.chat.transparency.usage.cost: "Coût estimé"
+synapse.chat.transparency.usage.duration: "Durée"
