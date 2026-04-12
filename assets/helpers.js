@@ -10,6 +10,7 @@ export function escapeHtml(text) {
 
 export function formatDate(dateString) {
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '—';
     const diff = Date.now() - date;
     const days = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
     if (days === 0) return 'Aujourd\'hui';

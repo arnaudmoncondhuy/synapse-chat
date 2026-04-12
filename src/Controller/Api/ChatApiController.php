@@ -12,6 +12,7 @@ use ArnaudMoncondhuy\SynapseCore\Contract\ConversationOwnerInterface;
 use ArnaudMoncondhuy\SynapseCore\Contract\PermissionCheckerInterface;
 use ArnaudMoncondhuy\SynapseCore\Engine\ChatService;
 use ArnaudMoncondhuy\SynapseCore\Event\SynapseChunkReceivedEvent;
+use ArnaudMoncondhuy\SynapseCore\Event\SynapseCodeExecutedEvent;
 use ArnaudMoncondhuy\SynapseCore\Event\SynapseMemoryResultsEvent;
 use ArnaudMoncondhuy\SynapseCore\Event\SynapseMultiTurnIterationEvent;
 use ArnaudMoncondhuy\SynapseCore\Event\SynapseRagResultsEvent;
@@ -237,8 +238,10 @@ class ChatApiController extends AbstractController
                     // Transparency sidebar: tool completed
                     $resultRaw = $e->getResult();
                     $resultPreview = \is_string($resultRaw) ? mb_substr($resultRaw, 0, 200) : mb_substr((string) json_encode($resultRaw, \JSON_UNESCAPED_UNICODE), 0, 200);
+                    $toolCallId = $e->getToolCallData()['id'] ?? null;
                     $sendEvent('tool_completed', [
                         'toolName' => $e->getToolName(),
+                        'toolCallId' => $toolCallId,
                         'resultPreview' => $resultPreview,
                     ]);
                 };
@@ -322,6 +325,11 @@ class ChatApiController extends AbstractController
                         'usage' => $e->usage,
                     ]);
                 };
+                // Transparency: code execution (tool code_execute) — affiche une carte
+                // avec le code Python + stdout + return_value dans la sidebar.
+                $codeExecutedListener = function (SynapseCodeExecutedEvent $e) use ($sendEvent): void {
+                    $sendEvent('code_execution', $e->toArray());
+                };
                 $this->dispatcher->addListener(SynapseStatusChangedEvent::class, $statusListener);
                 $this->dispatcher->addListener(SynapseTokenStreamedEvent::class, $tokenListener);
                 $this->dispatcher->addListener(SynapseToolCallCompletedEvent::class, $toolListener);
@@ -333,6 +341,7 @@ class ChatApiController extends AbstractController
                 $this->dispatcher->addListener(SynapseUsageRecordedEvent::class, $usageListener);
                 $this->dispatcher->addListener(SynapseWorkflowStepStartedEvent::class, $workflowStepStartedListener);
                 $this->dispatcher->addListener(SynapseWorkflowStepCompletedEvent::class, $workflowStepListener);
+                $this->dispatcher->addListener(SynapseCodeExecutedEvent::class, $codeExecutedListener);
 
                 // Pass user_id for spending limit checks
                 $user = $this->getUser();
@@ -381,8 +390,10 @@ class ChatApiController extends AbstractController
                     $typedOptions['stateless'] = (bool) $options['stateless'];
                 }
                 $typedOptions['debug'] = (bool) $options['debug'];
-                if (null !== $conversationId) {
-                    $typedOptions['conversation_id'] = $conversationId;
+                // Utiliser l'ID de la conversation réelle (peut avoir été créée en amont)
+                $effectiveConversationId = $conversation?->getId() ?? $conversationId;
+                if (null !== $effectiveConversationId && '' !== $effectiveConversationId) {
+                    $typedOptions['conversation_id'] = $effectiveConversationId;
                 }
                 if (isset($options['user_id']) && is_string($options['user_id'])) {
                     $typedOptions['user_id'] = $options['user_id'];
@@ -452,6 +463,7 @@ class ChatApiController extends AbstractController
                     $this->dispatcher->removeListener(SynapseUsageRecordedEvent::class, $usageListener);
                     $this->dispatcher->removeListener(SynapseWorkflowStepStartedEvent::class, $workflowStepStartedListener);
                     $this->dispatcher->removeListener(SynapseWorkflowStepCompletedEvent::class, $workflowStepListener);
+                    $this->dispatcher->removeListener(SynapseCodeExecutedEvent::class, $codeExecutedListener);
                 }
 
                 // Save BOTH user message and assistant response to database after processing
@@ -506,6 +518,10 @@ class ChatApiController extends AbstractController
                         $generatedAttachments = is_array($result['generated_attachments'] ?? null) ? $result['generated_attachments'] : [];
                         $answerText = ('' !== $result['answer']) ? $result['answer'] : ($hasGeneratedAttachments ? '[image]' : '');
                         $modelMessage = $this->conversationManager->saveMessage($conversation, MessageRole::MODEL, $answerText, $metadata, $callId, $generatedAttachments);
+
+                        // Exposer l'ID du message créé pour permettre au front de cibler les actions
+                        // par message (notamment le bouton "Replay transparence").
+                        $result['message_id'] = $modelMessage->getId();
 
                         // Inclure les UUIDs des images générées dans le résultat (pour affichage front)
                         if (!empty($generatedAttachments)) {
@@ -599,14 +615,17 @@ class ChatApiController extends AbstractController
                 } elseif (str_contains((string) $errorMessage, 'timeout') || str_contains((string) $errorMessage, 'Timeout')) {
                     $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.timeout', [], 'synapse_chat') : "⏱️ Timeout : L'IA a mis trop de temps à répondre.";
                 } else {
-                    // Logger l'erreur complète côté serveur, ne jamais exposer de détails au client
-                    if ($this->getParameter('kernel.debug')) {
-                        error_log(sprintf('[Synapse] %s (%s:%d)', $e->getMessage(), $e->getFile(), $e->getLine()));
-                    }
                     $errorMessage = $this->translator ? $this->translator->trans('synapse.chat.api.error.system', [], 'synapse_chat') : '❌ Erreur système : Une erreur inattendue est survenue.';
                 }
 
-                $sendEvent('error', (string) $errorMessage);
+                // Toujours logger l'exception côté serveur (pas seulement en debug)
+                error_log(sprintf('[Synapse Chat] %s in %s:%d', $e->getMessage(), $e->getFile(), $e->getLine()));
+
+                try {
+                    $sendEvent('error', (string) $errorMessage);
+                } catch (\Throwable) {
+                    // Stream déjà fermé — l'erreur est loggée via error_log ci-dessus
+                }
             }
         });
 

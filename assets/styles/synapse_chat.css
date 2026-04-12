@@ -712,6 +712,9 @@
     background: transparent;
     color: var(--synapse-chat-bubble-ai-text);
     padding: 0;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
 }
 
 .synapse-chat-debug-btn {
@@ -744,6 +747,17 @@
 
 .synapse-theme-dark .synapse-chat-debug-btn:hover {
     background: var(--synapse-chat-bg-surface);
+}
+
+/* Bouton "transparence" — réutilise les styles de debug-btn, légèrement décalé
+   pour cohabiter visuellement avec le bouton bug. Couleur accent au hover. */
+.synapse-chat-debug-btn + .synapse-chat-transparency-btn {
+    margin-left: 4px;
+}
+
+.synapse-chat-transparency-btn:hover {
+    color: var(--synapse-chat-accent, #6366f1);
+    border-color: var(--synapse-chat-accent, #6366f1);
 }
 
 /* Markdown dans la bulle */
@@ -779,6 +793,52 @@
 
 .synapse-theme-dark .synapse-chat-message--user .synapse-chat-bubble code {
     background: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Tables Markdown dans les bulles ─────────────────────────────────────── */
+.synapse-chat-bubble table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.synapse-chat-bubble thead th {
+    background: var(--synapse-chat-bg-input);
+    font-weight: 600;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--synapse-chat-border, #e2e8f0);
+    white-space: nowrap;
+}
+
+.synapse-chat-bubble tbody td {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--synapse-chat-border, #e2e8f0);
+    vertical-align: top;
+}
+
+.synapse-chat-bubble tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.synapse-chat-bubble tbody tr:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* Dark mode */
+.synapse-theme-dark .synapse-chat-bubble thead th {
+    background: rgba(255, 255, 255, 0.06);
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+
+.synapse-theme-dark .synapse-chat-bubble tbody td {
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.synapse-theme-dark .synapse-chat-bubble tbody tr:hover {
+    background: rgba(255, 255, 255, 0.03);
 }
 
 
@@ -1547,12 +1607,41 @@
     background: var(--synapse-chat-bg, #ffffff);
     display: flex;
     flex-direction: column;
+    position: relative;
+    flex-shrink: 0;
 }
 
 .synapse-chat-aside--open {
     width: 320px;
+    min-width: 280px;
+    max-width: 50vw;
     opacity: 1;
     overflow: hidden;
+}
+
+/* Désactiver la transition pendant le drag pour un rendu fluide */
+.synapse-chat-aside--resizing {
+    transition: none !important;
+}
+
+/* Poignée de redimensionnement (bord gauche du panneau) */
+.synapse-chat-aside__resizer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 6px;
+    cursor: col-resize;
+    z-index: 10;
+    background: transparent;
+    transition: background 0.15s ease;
+    touch-action: none;
+}
+
+.synapse-chat-aside__resizer:hover,
+.synapse-chat-aside--resizing .synapse-chat-aside__resizer {
+    background: var(--synapse-chat-accent, #6366f1);
+    opacity: 0.35;
 }
 
 /* ── Transparency Header ── */
@@ -1669,6 +1758,11 @@
     overflow: hidden;
 }
 
+.synapse-tp-popup__content--wide {
+    max-width: 960px;
+    max-height: 88vh;
+}
+
 .synapse-tp-popup__header {
     display: flex;
     align-items: center;
@@ -1708,6 +1802,12 @@
     line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;
+}
+
+/* Version dédiée à l'affichage du code exécuté dans la popup */
+.synapse-tp-popup__body--code {
+    padding: 18px 20px;
+    white-space: normal;
 }
 
 /* ── Tool call (inline in turns section) ── */
@@ -1987,6 +2087,138 @@
 @keyframes synapse-workflow-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.5; }
+}
+
+/* ── Code Execution (tool code_execute) ──────────────────────────────────── */
+.synapse-code-exec {
+    background: var(--synapse-chat-bg-secondary, #f8fafc);
+    border: 1px solid var(--synapse-chat-border, #e2e8f0);
+    border-left: 3px solid var(--synapse-chat-accent, #6366f1);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 0.8rem;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.3s ease, transform 0.3s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.synapse-code-exec.synapse-tp-clickable:hover {
+    background: var(--synapse-chat-hover, #f1f5f9);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.synapse-code-exec.synapse-tp-clickable:focus-visible {
+    outline: 2px solid var(--synapse-chat-accent, #6366f1);
+    outline-offset: 2px;
+}
+
+/* Blocs de code en mode popup : plus de hauteur disponible */
+.synapse-code-exec__code--full {
+    max-height: 60vh !important;
+    font-size: 0.8rem !important;
+}
+
+.synapse-code-exec--visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.synapse-code-exec--ok {
+    border-left-color: #10b981;
+}
+
+.synapse-code-exec--fail {
+    border-left-color: #ef4444;
+}
+
+.synapse-code-exec__header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.75rem;
+}
+
+.synapse-code-exec__status {
+    font-weight: 700;
+}
+
+.synapse-code-exec--ok .synapse-code-exec__status {
+    color: #10b981;
+}
+
+.synapse-code-exec--fail .synapse-code-exec__status {
+    color: #ef4444;
+}
+
+.synapse-code-exec__lang {
+    background: var(--synapse-chat-accent, #6366f1);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+}
+
+.synapse-code-exec__duration {
+    color: var(--synapse-chat-text-muted, #94a3b8);
+    margin-left: auto;
+    font-size: 0.7rem;
+}
+
+.synapse-code-exec__label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--synapse-chat-text-muted, #94a3b8);
+    margin-top: 6px;
+    margin-bottom: 2px;
+}
+
+.synapse-code-exec__code,
+.synapse-code-exec__stdout,
+.synapse-code-exec__stderr,
+.synapse-code-exec__return {
+    background: #0f172a;
+    color: #f1f5f9;
+    font-family: ui-monospace, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin: 0 0 4px 0;
+    overflow: auto;
+    max-height: 240px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    border: 1px solid #1e293b;
+}
+
+.synapse-code-exec__code code {
+    background: transparent;
+    color: #f1f5f9;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 0;
+}
+
+.synapse-code-exec__stderr {
+    color: #fecaca;
+}
+
+.synapse-code-exec__return {
+    color: #a7f3d0;
+}
+
+.synapse-code-exec__error {
+    color: #ef4444;
+    font-size: 0.75rem;
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 4px;
 }
 
 /* Responsive : sur petits écrans, la sidebar passe en overlay */
